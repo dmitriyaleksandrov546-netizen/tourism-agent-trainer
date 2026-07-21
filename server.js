@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildNeuroclientPrompt, createFallbackReply, normalizeClientReply } from './src/neuroclientPrompt.js';
+import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from './src/neuroclientPrompt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +15,10 @@ app.post('/api/neuroclient', async (req, res) => {
 
   if (!scenarioId || typeof agentText !== 'string') {
     return res.status(400).json({ error: 'scenarioId and agentText are required' });
+  }
+
+  if (containsAbuse(agentText)) {
+    return res.json(createFallbackReply(scenarioId, agentText, turn, history));
   }
 
   if (!process.env.OPENAI_API_KEY) {
