@@ -2,13 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from './neuroclientPrompt.js';
 
 describe('neuroclientPrompt', () => {
-  it('sets a boundary for rude tone but still reacts to useful travel content', () => {
+  it('accepts a polite process reply instead of attacking it as too generic', () => {
+    const reply = createFallbackReply('turkey-family-hard', 'Да, конечно, сейчас подберу варианты и посмотрим, что реально проходит по бюджету.', 1, []).text;
+
+    expect(reply).toMatch(/ок|хорошо|жду|ожидаю|давайте/i);
+    expect(reply).not.toContain('общими словами');
+    expect(reply).not.toContain('что именно вы проверили');
+  });
+
+  it('sets a firm boundary for rude or abusive tone instead of normalizing it', () => {
     expect(containsAbuse('да блять все мы ответили уже')).toBe(true);
     const reply = createFallbackReply('uae-premium-anxious', 'да блять проверю депозит пляж и стройку', 2, []).text;
 
     expect(reply).toContain('без мата');
-    expect(reply).toContain('депозит');
-    expect(reply).not.toContain('обращусь к другому');
+    expect(reply).toContain('не продолжаю');
   });
 
   it('only threatens to leave after repeated rude tone in the dialogue history', () => {
@@ -28,7 +35,9 @@ describe('neuroclientPrompt', () => {
     });
 
     expect(payload.system).toContain('реального туриста');
-    expect(payload.system).toContain('сначала поставь мягкую границу');
+    expect(payload.system).toContain('стандартный клиент');
+    expect(payload.system).toContain('сначала согласись и подожди');
+    expect(payload.system).toContain('сразу поставь дистанцию');
     expect(payload.user).toContain('Jumeirah Calm Bay 5*');
     expect(payload.user).toContain('стройку');
   });

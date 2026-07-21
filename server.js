@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from './src/neuroclientPrompt.js';
+import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, isPoliteProcessReply, normalizeClientReply } from './src/neuroclientPrompt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +18,10 @@ app.post('/api/neuroclient', async (req, res) => {
   }
 
   if (containsAbuse(agentText)) {
+    return res.json(createFallbackReply(scenarioId, agentText, turn, history));
+  }
+
+  if (isPoliteProcessReply(agentText)) {
     return res.json(createFallbackReply(scenarioId, agentText, turn, history));
   }
 
