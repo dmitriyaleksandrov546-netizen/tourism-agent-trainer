@@ -26,4 +26,22 @@ describe('simulatorEngine', () => {
     expect(reply).toContain('бюджет');
     expect(reply).toContain('отзывы');
   });
+
+  it('does not repeat the same neuroclient phrase on repeated weak replies', () => {
+    const firstReply = getNextClientReply('egypt-budget-objections', 'Добрый день. Речь идёт о разных отелях?', 1);
+    const secondReply = getNextClientReply('egypt-budget-objections', 'Да, конечно проверяли.', 2, [
+      { role: 'client', text: firstReply }
+    ]);
+
+    expect(secondReply).not.toEqual(firstReply);
+    expect(secondReply).toContain('что именно');
+  });
+
+  it('uses scenario-specific objections instead of one generic script', () => {
+    const egyptReply = getNextClientReply('egypt-budget-objections', 'Подберу вариант.', 2);
+    const uaeReply = getNextClientReply('uae-premium-anxious', 'Подберу вариант.', 2);
+
+    expect(egyptReply).toContain('дешевле');
+    expect(uaeReply).toContain('стройк');
+  });
 });

@@ -70,7 +70,7 @@ function App() {
     if (!text) return;
 
     const evaluation = evaluateAgentReply(text);
-    const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1);
+    const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1, messages);
     const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
     setMessages((current) => [
