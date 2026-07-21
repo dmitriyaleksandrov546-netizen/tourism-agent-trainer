@@ -32,6 +32,7 @@ app.post('/api/neuroclient', async (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'dist')));
+app.use('/tourism-agent-trainer', express.static(path.join(__dirname, 'dist')));
 app.get(/.*/, (_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
