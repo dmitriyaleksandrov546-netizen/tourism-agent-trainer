@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Bot,
@@ -10,6 +10,8 @@ import {
   LayoutDashboard,
   Menu,
   MessageSquareText,
+  Mic,
+  MicOff,
   Play,
   Search,
   Send,
@@ -17,7 +19,8 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
-  UsersRound
+  UsersRound,
+  Wand2
 } from 'lucide-react';
 import {
   adminSettings,
@@ -30,7 +33,9 @@ import {
   testQuestions,
   trainingTasks
 } from './appData.js';
-import { createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { requestNeuroclientReply } from './neuroclientApi.js';
+import { appendDictation, cleanDictationText } from './dictation.js';
 import './styles.css';
 
 const iconMap = {
@@ -51,6 +56,11 @@ function App() {
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [mode, setMode] = useState('agent');
   const [hotelQuery, setHotelQuery] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [clientSource, setClientSource] = useState('local-fallback');
+  const [voiceState, setVoiceState] = useState('idle');
+  const [voiceMessage, setVoiceMessage] = useState('');
+  const recognitionRef = useRef(null);
 
   const activeSection = useMemo(() => getSectionById(activeSectionId), [activeSectionId]);
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
@@ -65,25 +75,78 @@ function App() {
     setActiveSectionId('trainer');
   };
 
-  const sendReply = () => {
+  const sendReply = async () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || isSending) return;
 
-    const evaluation = evaluateAgentReply(text);
-    const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1, messages);
+    const evaluation = evaluateAgentReply(text, activeScenarioId);
+    const turn = messages.filter((m) => m.role === 'agent').length + 1;
     const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const thinkingId = `client-thinking-${Date.now()}`;
+    const nextMessages = [
+      ...messages,
+      { id: `agent-${messages.length}`, role: 'agent', text, time: now },
+      { id: thinkingId, role: 'client', text: '...', time: 'думает' }
+    ];
 
-    setMessages((current) => [
-      ...current,
-      { id: `agent-${current.length}`, role: 'agent', text, time: now },
-      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'нейроклиент' }
-    ]);
+    setMessages(nextMessages);
     setLastEvaluation(evaluation);
     setDraft('');
+    setIsSending(true);
+
+    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages });
+    setClientSource(reply.source || 'local-fallback');
+    setMessages((current) => current.map((message) => (
+      message.id === thinkingId
+        ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'тренажёр' }
+        : message
+    )));
+    setIsSending(false);
   };
 
   const quickInsert = (text) => {
     setDraft((current) => (current ? `${current}\n${text}` : text));
+  };
+
+  const polishDraft = () => {
+    setDraft((current) => cleanDictationText(current));
+  };
+
+  const startDictation = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceMessage('В этом браузере голосовой ввод недоступен. Лучше открыть в Chrome.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognitionRef.current = recognition;
+    setVoiceState('listening');
+    setVoiceMessage('Слушаю. Говори ответ клиенту обычным голосом.');
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || '')
+        .join(' ');
+      if (event.results[event.results.length - 1]?.isFinal) {
+        setDraft((current) => appendDictation(current, transcript));
+        setVoiceMessage('Расшифровал и поправил текст. Проверь перед отправкой.');
+      }
+    };
+    recognition.onerror = () => {
+      setVoiceState('idle');
+      setVoiceMessage('Не смог распознать голос. Проверь доступ к микрофону.');
+    };
+    recognition.onend = () => setVoiceState('idle');
+    recognition.start();
+  };
+
+  const stopDictation = () => {
+    recognitionRef.current?.stop();
+    setVoiceState('idle');
   };
 
   return (
@@ -150,6 +213,13 @@ function App() {
             onQuickInsert={quickInsert}
             onSelectScenario={selectScenario}
             onSendReply={sendReply}
+            onStartDictation={startDictation}
+            onStopDictation={stopDictation}
+            onPolishDraft={polishDraft}
+            isSending={isSending}
+            voiceState={voiceState}
+            voiceMessage={voiceMessage}
+            clientSource={clientSource}
           />
         )}
         {activeSectionId === 'hotels' && <HotelsPage query={hotelQuery} onQueryChange={setHotelQuery} hotels={filteredHotels} />}
@@ -183,7 +253,7 @@ function DashboardPage({ readiness, onOpenTrainer }) {
   );
 }
 
-function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEvaluation, onDraftChange, onQuickInsert, onSelectScenario, onSendReply }) {
+function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEvaluation, onDraftChange, onQuickInsert, onSelectScenario, onSendReply, onStartDictation, onStopDictation, onPolishDraft, isSending, voiceState, voiceMessage, clientSource }) {
   return (
     <section className="workspaceGrid">
       <div className="panel scenarioPanel">
@@ -202,6 +272,9 @@ function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEv
 
       <div className="panel chatPanel">
         <div className="chatHeader"><div><p className="eyebrow">Активный диалог</p><h3>{activeScenario.title}</h3></div><button className="ghostButton" onClick={() => onSelectScenario(activeScenarioId)}><Play size={15} /> Перезапустить</button></div>
+        <div className={`clientMode ${clientSource === 'openai' ? 'live' : ''}`}>
+          <Brain size={15} /> {clientSource === 'openai' ? 'Режим: живой AI-клиент понимает контекст' : 'Режим: локальная страховочная логика. Для настоящего клиента нужен backend-link.'}
+        </div>
         <div className="briefCard"><div><b>Клиент:</b> {activeScenario.clientProfile.name}, {activeScenario.clientProfile.family}</div><div><b>Скрытая боль:</b> {activeScenario.clientProfile.hiddenNeed}</div><div><b>Триггер:</b> {activeScenario.clientProfile.trigger}</div></div>
         <div className="messagesArea">
           {messages.map((message) => (
@@ -213,9 +286,22 @@ function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEv
           <button onClick={() => onQuickInsert('Сразу честно предупрежу по рискам и проверю отзывы по свежим датам, чтобы не обещать лишнего.')}>+ Риски</button>
           <button onClick={() => onQuickInsert('Предложу 2–3 варианта: в бюджет, комфортнее и самый безопасный для семьи.')}>+ Вилка отелей</button>
         </div>
+        <div className="voiceBar">
+          <button className={voiceState === 'listening' ? 'recording' : ''} onClick={voiceState === 'listening' ? onStopDictation : onStartDictation}>
+            {voiceState === 'listening' ? <MicOff size={16} /> : <Mic size={16} />}
+            {voiceState === 'listening' ? 'Остановить запись' : 'Надиктовать ответ'}
+          </button>
+          <button onClick={onPolishDraft}><Wand2 size={16} /> Причесать текст</button>
+          {voiceMessage && <span>{voiceMessage}</span>}
+        </div>
         <div className="composer">
-          <textarea value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Напиши ответ клиенту. Система оценит: вопросы, честность, возражения, следующий шаг." onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') onSendReply(); }} />
-          <button onClick={onSendReply}><Send size={18} /> Ответить</button>
+          <textarea value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Напиши или надиктуй ответ клиенту. Enter — отправить, Shift+Enter — новая строка." onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              onSendReply();
+            }
+          }} />
+          <button onClick={onSendReply} disabled={isSending}>{isSending ? <Brain size={18} /> : <Send size={18} />} {isSending ? 'Клиент думает' : 'Ответить'}</button>
         </div>
       </div>
 

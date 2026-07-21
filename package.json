@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "serve": "node server.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run"
@@ -14,7 +15,8 @@
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest"
+    "lucide-react": "latest",
+    "express": "latest"
   },
   "devDependencies": {
     "vitest": "latest",

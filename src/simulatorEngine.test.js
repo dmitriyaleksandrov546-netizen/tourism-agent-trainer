@@ -44,4 +44,18 @@ describe('simulatorEngine', () => {
     expect(egyptReply).toContain('дешевле');
     expect(uaeReply).toContain('стройк');
   });
+
+  it('does not give family-with-children advice in a premium UAE scenario without children', () => {
+    const result = evaluateAgentReply('Красивый отель, точно без проблем.', 'uae-premium-anxious');
+
+    expect(result.advice.join(' ')).not.toContain('дети');
+    expect(result.advice.join(' ')).toContain('депозит');
+  });
+
+  it('marks rude agent tone as a client-losing failure', () => {
+    const result = evaluateAgentReply('да блять все мы ответили уже', 'uae-premium-anxious');
+
+    expect(result.score).toBe(0);
+    expect(result.verdict).toContain('грубость');
+  });
 });

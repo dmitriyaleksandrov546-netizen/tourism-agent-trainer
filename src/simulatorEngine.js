@@ -150,8 +150,17 @@ export function getScenarioById(id) {
   return scenarios.find((scenario) => scenario.id === id) || scenarios[0];
 }
 
-export function evaluateAgentReply(text = '') {
+const rudePatterns = ['блять', 'бляд', 'сука', 'нахуй', 'хуй', 'пизд', 'еба', 'ёба', 'заеб', 'мудак', 'идиот'];
+
+function hasRudeTone(text = '') {
   const normalized = text.toLowerCase();
+  return rudePatterns.some((pattern) => normalized.includes(pattern));
+}
+
+export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard') {
+  const scenario = getScenarioById(scenarioId);
+  const normalized = text.toLowerCase();
+  const rudeTone = hasRudeTone(text);
   const detected = [];
   const details = rubric.map((item) => {
     const hits = item.patterns.filter((pattern) => normalized.includes(pattern));
@@ -168,9 +177,9 @@ export function evaluateAgentReply(text = '') {
 
   const lengthBonus = normalized.length > 180 ? 8 : normalized.length > 80 ? 4 : 0;
   const dangerousPromisePenalty = ['гарантирую', 'точно понравится', 'без проблем', 'идеально'].some((phrase) => normalized.includes(phrase)) ? 12 : 0;
-  const score = Math.max(0, Math.min(100, details.reduce((sum, item) => sum + item.earned, 0) + lengthBonus - dangerousPromisePenalty));
+  const score = rudeTone ? 0 : Math.max(0, Math.min(100, details.reduce((sum, item) => sum + item.earned, 0) + lengthBonus - dangerousPromisePenalty));
 
-  const verdict = score >= 78 ? 'Готово к реальному клиенту' : score >= 52 ? 'Нормально, но нужен дожим' : 'Высокий риск слить заявку';
+  const verdict = rudeTone ? 'Клиент почти потерян: грубость/мат' : score >= 78 ? 'Готово к реальному клиенту' : score >= 52 ? 'Нормально, но нужен дожим' : 'Высокий риск слить заявку';
 
   const missed = details.filter((item) => item.earned === 0).map((item) => item.label);
 
@@ -180,13 +189,21 @@ export function evaluateAgentReply(text = '') {
     detected,
     details,
     missed,
-    advice: buildAdvice(detected, dangerousPromisePenalty)
+    advice: rudeTone ? ['Остановиться и извиниться. Реальный клиент после такого почти точно уйдёт.', 'Вернуться к спокойному тону: “Извините, давайте по делу. Я проверю источники и риски”.'] : buildAdvice(detected, dangerousPromisePenalty, scenario)
   };
 }
 
-function buildAdvice(detected, dangerousPromisePenalty) {
+function buildAdvice(detected, dangerousPromisePenalty, scenario) {
   const advice = [];
-  if (!detected.includes('needs')) advice.push('Сначала добери вводные: дети, бюджет, даты, пляж, питание, что критично, что можно уступить.');
+  if (!detected.includes('needs')) {
+    if (scenario.clientProfile.children.length) {
+      advice.push('Сначала добери вводные: дети, бюджет, даты, пляж, питание, что критично, что можно уступить.');
+    } else if (scenario.id === 'uae-premium-anxious') {
+      advice.push('Сначала добери премиум-вводные: район, пляж, стройка рядом, депозит, питание, трансфер, что критично без сюрпризов.');
+    } else {
+      advice.push('Сначала добери вводные: даты, бюджет, что критично, что уже сравнивали, где клиент боится ошибиться.');
+    }
+  }
   if (!detected.includes('risk')) advice.push('Добавь честное предупреждение по рискам, иначе клиент получит завышенные ожидания.');
   if (!detected.includes('alternatives')) advice.push('Дай вилку из 2–3 вариантов: “в бюджет”, “комфортнее”, “безопаснее”.');
   if (!detected.includes('nextStep')) advice.push('Закрывай на конкретный следующий шаг: созвон, подборку, бронь, фиксацию цены.');
