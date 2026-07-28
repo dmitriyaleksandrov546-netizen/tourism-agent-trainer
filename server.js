@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, isPoliteProcessReply, normalizeClientReply } from './src/neuroclientPrompt.js';
@@ -7,8 +8,29 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 5173);
+const privateDataDir = path.join(__dirname, 'private-data', 'amocrm');
 
 app.use(express.json({ limit: '512kb' }));
+
+app.post('/api/wazzup/webhook', (req, res) => {
+  const expectedToken = process.env.WAZZUP_WEBHOOK_TOKEN;
+  if (expectedToken && req.query.token !== expectedToken) {
+    return res.status(401).json({ ok: false, error: 'invalid webhook token' });
+  }
+
+  const body = req.body || {};
+  if (body.test === true) {
+    return res.json({ ok: true });
+  }
+
+  const saved = saveWazzupWebhook({
+    receivedAt: new Date().toISOString(),
+    authorizationPresent: Boolean(req.get('authorization')),
+    body
+  });
+
+  return res.json({ ok: true, saved });
+});
 
 app.post('/api/neuroclient', async (req, res) => {
   const { scenarioId, agentText, turn, history } = req.body || {};
@@ -48,6 +70,44 @@ app.get(/.*/, (_req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Tourism trainer running on http://0.0.0.0:${port}`);
 });
+
+function saveWazzupWebhook(event) {
+  const messages = Array.isArray(event.body?.messages) ? event.body.messages : [];
+  const statuses = Array.isArray(event.body?.statuses) ? event.body.statuses : [];
+  const date = event.receivedAt.slice(0, 10);
+  const dir = path.join(privateDataDir, 'wazzup-webhooks');
+  fs.mkdirSync(dir, { recursive: true });
+
+  const rawPath = path.join(dir, `raw-${date}.jsonl`);
+  fs.appendFileSync(rawPath, `${JSON.stringify(event)}\n`);
+
+  if (messages.length > 0) {
+    const normalizedPath = path.join(dir, `messages-${date}.jsonl`);
+    const rows = messages.map((message) => JSON.stringify({
+      receivedAt: event.receivedAt,
+      messageId: message.messageId,
+      channelId: message.channelId,
+      chatType: message.chatType,
+      chatId: message.chatId,
+      dateTime: message.dateTime,
+      type: message.type,
+      isEcho: message.isEcho,
+      authorId: message.authorId,
+      authorName: message.authorName,
+      contactName: message.contact?.name,
+      contactPhone: message.contact?.phone,
+      contactUsername: message.contact?.username,
+      text: message.text,
+      contentUri: message.contentUri,
+      status: message.status,
+      isEdited: message.isEdited,
+      isDeleted: message.isDeleted
+    })).join('\n');
+    fs.appendFileSync(normalizedPath, `${rows}\n`);
+  }
+
+  return { messages: messages.length, statuses: statuses.length };
+}
 
 async function callOpenAI(prompt) {
   const models = [process.env.OPENAI_MODEL || 'gpt-4.1-mini', 'gpt-4o-mini'];
