@@ -11,18 +11,22 @@
     "test": "vitest run",
     "manual:ingest": "python3 scripts/manual_chat_ingest.py --once",
     "manual:watch": "python3 scripts/manual_chat_ingest.py --watch --interval 30",
-    "manual:cron": "python3 scripts/manual_chat_ingest.py --once --quiet-idle"
+    "manual:cron": "python3 scripts/manual_chat_ingest.py --once --quiet-idle",
+    "video:ocr": "python3 scripts/video_chat_ocr.py",
+    "amocrm:lead-urls": "python3 scripts/amocrm_export_lead_urls.py",
+    "amocrm:browser-scrape": "node scripts/amocrm_browser_scrape.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "express": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
-    "express": "latest"
+    "vite": "latest"
   },
   "devDependencies": {
-    "vitest": "latest",
-    "jsdom": "latest"
+    "jsdom": "latest",
+    "playwright": "^1.62.0",
+    "vitest": "latest"
   }
 }
