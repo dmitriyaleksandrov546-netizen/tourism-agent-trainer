@@ -10,7 +10,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "manual:ingest": "python3 scripts/manual_chat_ingest.py --once",
-    "manual:watch": "python3 scripts/manual_chat_ingest.py --watch --interval 30"
+    "manual:watch": "python3 scripts/manual_chat_ingest.py --watch --interval 30",
+    "manual:cron": "python3 scripts/manual_chat_ingest.py --once --quiet-idle"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

@@ -372,7 +372,7 @@ def iter_inbox_files() -> list[Path]:
     return sorted(files, key=lambda p: p.stat().st_mtime)
 
 
-def run_once(limit: int | None, use_ai: bool) -> list[ProcessResult]:
+def run_once(limit: int | None, use_ai: bool, quiet_idle: bool = False) -> list[ProcessResult]:
     ensure_dirs()
     files = iter_inbox_files()
     if limit is not None:
@@ -382,7 +382,7 @@ def run_once(limit: int | None, use_ai: bool) -> list[ProcessResult]:
         result = process_file(path, use_ai=use_ai)
         results.append(result)
         print(json.dumps(result.__dict__, ensure_ascii=False), flush=True)
-    if not files:
+    if not files and not quiet_idle:
         print(json.dumps({"status": "idle", "inbox": str(INBOX_DIR)}, ensure_ascii=False), flush=True)
     return results
 
@@ -394,6 +394,7 @@ def main() -> int:
     parser.add_argument("--interval", type=int, default=30, help="watch interval seconds")
     parser.add_argument("--limit", type=int, default=None, help="max files per pass")
     parser.add_argument("--no-ai", action="store_true", help="disable OpenAI scoring and use rule fallback")
+    parser.add_argument("--quiet-idle", action="store_true", help="do not print anything when inbox is empty")
     args = parser.parse_args()
 
     init_env()
@@ -401,12 +402,12 @@ def main() -> int:
     use_ai = not args.no_ai
 
     if not args.watch:
-        run_once(args.limit, use_ai)
+        run_once(args.limit, use_ai, quiet_idle=args.quiet_idle)
         return 0
 
     print(json.dumps({"status": "watching", "inbox": str(INBOX_DIR), "interval": args.interval, "ai": use_ai}, ensure_ascii=False), flush=True)
     while True:
-        run_once(args.limit, use_ai)
+        run_once(args.limit, use_ai, quiet_idle=args.quiet_idle)
         time.sleep(args.interval)
 
 
