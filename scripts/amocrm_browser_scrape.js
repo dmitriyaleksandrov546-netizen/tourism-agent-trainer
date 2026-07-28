@@ -45,6 +45,30 @@ function loadUrls(filePath) {
     .filter((line) => line && !line.startsWith('#'));
 }
 
+function loadCookies(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const items = Array.isArray(raw) ? raw : raw.cookies || [];
+  return items
+    .map((cookie) => {
+      const domain = cookie.domain || cookie.host || cookie.Host || '';
+      const normalized = {
+        name: cookie.name || cookie.Name,
+        value: String(cookie.value ?? cookie.Value ?? ''),
+        domain: domain.startsWith('.') ? domain : domain || '.amocrm.ru',
+        path: cookie.path || cookie.Path || '/',
+        httpOnly: Boolean(cookie.httpOnly || cookie.HttpOnly),
+        secure: cookie.secure !== undefined ? Boolean(cookie.secure) : true,
+      };
+      const expires = cookie.expires ?? cookie.expirationDate ?? cookie.ExpirationDate;
+      if (expires && Number(expires) > 0) normalized.expires = Math.floor(Number(expires));
+      const sameSite = cookie.sameSite || cookie.SameSite;
+      if (sameSite && ['Strict', 'Lax', 'None'].includes(sameSite)) normalized.sameSite = sameSite;
+      return normalized;
+    })
+    .filter((cookie) => cookie.name && cookie.value && cookie.domain);
+}
+
 async function savePageSnapshot(page, url, index) {
   const leadId = url.match(/leads\/detail\/(\d+)/)?.[1] || String(index).padStart(5, '0');
   const dir = path.join(dataDir, `${String(index).padStart(5, '0')}-${safeName(leadId)}`);
@@ -81,6 +105,7 @@ async function main() {
   const headed = hasFlag('--headed');
   const login = hasFlag('--login');
   const urlsPath = arg('--urls', defaultUrlsPath);
+  const cookiesPath = arg('--cookies', null);
   const startUrl = arg('--url', 'https://tegtour.amocrm.ru/');
   const limit = Number(arg('--limit', '0')) || null;
   const waitMs = Number(arg('--wait-ms', '5000'));
@@ -91,6 +116,12 @@ async function main() {
     locale: 'ru-RU',
   });
   const page = context.pages()[0] || await context.newPage();
+
+  const cookies = loadCookies(cookiesPath);
+  if (cookies.length) {
+    await context.addCookies(cookies);
+    console.log(JSON.stringify({ status: 'cookies_loaded', count: cookies.length, cookiesPath }));
+  }
 
   if (login) {
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
