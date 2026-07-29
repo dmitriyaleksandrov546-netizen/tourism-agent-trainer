@@ -14,10 +14,12 @@
     "manual:cron": "python3 scripts/manual_chat_ingest.py --once --quiet-idle",
     "video:ocr": "python3 scripts/video_chat_ocr.py",
     "amocrm:lead-urls": "python3 scripts/amocrm_export_lead_urls.py",
-    "amocrm:browser-scrape": "node scripts/amocrm_browser_scrape.js"
+    "amocrm:browser-scrape": "node scripts/amocrm_browser_scrape.js",
+    "video:upload-server": "node scripts/video_upload_server.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "busboy": "^1.6.0",
     "express": "latest",
     "lucide-react": "latest",
     "react": "latest",
