@@ -16,7 +16,8 @@
     "amocrm:lead-urls": "python3 scripts/amocrm_export_lead_urls.py",
     "amocrm:browser-scrape": "node scripts/amocrm_browser_scrape.js",
     "video:upload-server": "node scripts/video_upload_server.js",
-    "mango:calls": "python3 scripts/analyze_mango_calls.py"
+    "mango:calls": "python3 scripts/analyze_mango_calls.py",
+    "mango:calls-stream": "python3 scripts/analyze_mango_calls_stream.py"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
