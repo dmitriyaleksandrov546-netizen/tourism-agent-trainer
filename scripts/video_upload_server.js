@@ -19,7 +19,7 @@ function safeName(name) {
 }
 
 function html(body) {
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Upload video</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#f4f4f5;margin:0;padding:28px;line-height:1.45}.box{max-width:680px;margin:0 auto;background:#171a21;border:1px solid #2c3240;border-radius:18px;padding:24px}input,button{font:inherit}input[type=file]{display:block;margin:18px 0;padding:16px;background:#11141a;border:1px dashed #4b5563;border-radius:12px;width:100%;box-sizing:border-box}button{background:#22c55e;color:#05130a;border:0;border-radius:12px;padding:14px 18px;font-weight:700}.muted{color:#9ca3af}.warn{color:#fbbf24}</style></head><body><div class="box">${body}</div></body></html>`;
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Upload video</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#f4f4f5;margin:0;padding:28px;line-height:1.45}.box{max-width:680px;margin:0 auto;background:#171a21;border:1px solid #2c3240;border-radius:18px;padding:24px}input,button{font:inherit}input[type=file]{display:block;margin:18px 0;padding:16px;background:#11141a;border:1px dashed #4b5563;border-radius:12px;width:100%;box-sizing:border-box}button{background:#22c55e;color:#05130a;border:0;border-radius:12px;padding:14px 18px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.muted{color:#9ca3af}.warn{color:#fbbf24}.bar{height:12px;background:#2c3240;border-radius:999px;overflow:hidden;margin:14px 0}.fill{height:100%;width:0;background:#22c55e}.status{white-space:pre-wrap;background:#0b0d12;border-radius:12px;padding:12px;margin-top:12px;color:#d1d5db}</style></head><body><div class="box">${body}</div></body></html>`;
 }
 
 function authorized(reqUrl) {
@@ -43,10 +43,56 @@ const server = http.createServer((req, res) => {
       <h1>Загрузка видео сделок</h1>
       <p class="muted">Файл сохранится приватно на сервере в <code>private-data/video-inbox/</code>.</p>
       <p class="warn">Лучше MP4, 1080p, 10–20 диалогов на видео. Лимит сервера: до ${Math.round(maxBytes / 1024 / 1024)} МБ.</p>
-      <form method="post" action="/upload${tokenPart}" enctype="multipart/form-data">
-        <input type="file" name="video" accept="video/*,.mp4,.mov,.mkv,.webm" required>
-        <button type="submit">Загрузить видео</button>
+      <form id="uploadForm" method="post" action="/upload${tokenPart}" enctype="multipart/form-data">
+        <input id="videoInput" type="file" name="video" accept="video/*,.mp4,.mov,.mkv,.webm" required>
+        <button id="uploadButton" type="submit">Загрузить видео</button>
       </form>
+      <div class="bar"><div id="progressFill" class="fill"></div></div>
+      <div id="status" class="status">Выбери файл и нажми кнопку. Если кнопка не реагирует — файл начнёт грузиться автоматически после выбора.</div>
+      <script>
+        const form = document.getElementById('uploadForm');
+        const input = document.getElementById('videoInput');
+        const button = document.getElementById('uploadButton');
+        const fill = document.getElementById('progressFill');
+        const status = document.getElementById('status');
+        let uploading = false;
+        function upload() {
+          if (uploading) return;
+          if (!input.files || !input.files[0]) { status.textContent = 'Сначала выбери файл'; return; }
+          uploading = true;
+          button.disabled = true;
+          button.textContent = 'Загружается...';
+          const file = input.files[0];
+          status.textContent = 'Начинаю загрузку: ' + file.name + ' (' + Math.round(file.size/1024/1024) + ' МБ)';
+          const data = new FormData();
+          data.append('video', file);
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', form.action, true);
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              fill.style.width = pct + '%';
+              status.textContent = 'Загрузка: ' + pct + '%';
+            }
+          };
+          xhr.onload = () => {
+            fill.style.width = '100%';
+            if (xhr.status >= 200 && xhr.status < 300) {
+              document.open(); document.write(xhr.responseText); document.close();
+            } else {
+              uploading = false; button.disabled = false; button.textContent = 'Повторить загрузку';
+              status.textContent = 'Ошибка HTTP ' + xhr.status + '\n' + xhr.responseText.slice(0, 500);
+            }
+          };
+          xhr.onerror = () => {
+            uploading = false; button.disabled = false; button.textContent = 'Повторить загрузку';
+            status.textContent = 'Сеть оборвала загрузку. Попробуй ещё раз или через Google Drive.';
+          };
+          xhr.send(data);
+        }
+        form.addEventListener('submit', (e) => { e.preventDefault(); upload(); });
+        input.addEventListener('change', () => { if (input.files && input.files[0]) setTimeout(upload, 300); });
+      </script>
     `));
     return;
   }
