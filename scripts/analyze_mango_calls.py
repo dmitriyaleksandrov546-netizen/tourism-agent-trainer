@@ -228,6 +228,8 @@ def media_duration_seconds(path: pathlib.Path) -> float | None:
 
 
 def clip_audio(input_path: pathlib.Path, max_seconds: int) -> pathlib.Path:
+    if max_seconds <= 0:
+        return input_path
     duration = media_duration_seconds(input_path)
     if not duration or duration <= max_seconds:
         return input_path
@@ -240,25 +242,53 @@ def clip_audio(input_path: pathlib.Path, max_seconds: int) -> pathlib.Path:
     return clipped
 
 
-def transcribe_audio(audio_path: pathlib.Path) -> dict[str, Any]:
+def split_audio_chunks(audio_path: pathlib.Path, chunk_seconds: int) -> list[pathlib.Path]:
+    duration = media_duration_seconds(audio_path) or 0
+    if chunk_seconds <= 0 or duration <= chunk_seconds and audio_path.stat().st_size < 24 * 1024 * 1024:
+        return [audio_path]
+    chunks_dir = AUDIO_DIR / "chunks" / audio_path.stem
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(chunks_dir.glob("chunk-*.mp3"))
+    if existing:
+        return existing
+    subprocess.run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(audio_path),
+        "-f", "segment", "-segment_time", str(chunk_seconds), "-ac", "1", "-ar", "16000",
+        str(chunks_dir / "chunk-%03d.mp3"),
+    ], check=True, timeout=max(180, int(duration) + 60))
+    return sorted(chunks_dir.glob("chunk-*.mp3"))
+
+
+def transcribe_audio(audio_path: pathlib.Path, chunk_seconds: int = 600) -> dict[str, Any]:
     out_path = TRANSCRIPT_DIR / (audio_path.stem + ".json")
     if out_path.exists():
         return json.loads(out_path.read_text(encoding="utf-8"))
     from openai import OpenAI
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
-    with audio_path.open("rb") as file:
-        result = client.audio.transcriptions.create(
-            model=model,
-            file=file,
-            language="ru",
-            response_format="json",
-        )
-    if hasattr(result, "model_dump"):
-        data = result.model_dump()
-    else:
-        data = json.loads(result.json())
+    chunks = split_audio_chunks(audio_path, chunk_seconds)
+    parts: list[dict[str, Any]] = []
+    for index, chunk in enumerate(chunks, start=1):
+        with chunk.open("rb") as file:
+            result = client.audio.transcriptions.create(
+                model=model,
+                file=file,
+                language="ru",
+                response_format="json",
+            )
+        if hasattr(result, "model_dump"):
+            part = result.model_dump()
+        else:
+            part = json.loads(result.json())
+        part["chunk_index"] = index
+        part["chunk_file"] = str(chunk)
+        parts.append(part)
+    data = {
+        "text": "\n".join(str(part.get("text") or "").strip() for part in parts if str(part.get("text") or "").strip()),
+        "parts": parts,
+    }
     data["audio_file"] = str(audio_path)
+    data["chunk_count"] = len(chunks)
     data["transcribed_at"] = utc_now()
     out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return data
@@ -299,9 +329,9 @@ audio_duration_sec: {audio_duration}
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def score_transcript(candidate: CallCandidate, transcript: str, audio_duration: float | None) -> dict[str, Any]:
+def score_transcript(candidate: CallCandidate, transcript: str, audio_duration: float | None, force: bool = False) -> dict[str, Any]:
     out_path = SCORED_DIR / f"lead-{candidate.lead_id}-note-{candidate.note_id}.json"
-    if out_path.exists():
+    if out_path.exists() and not force:
         return json.loads(out_path.read_text(encoding="utf-8"))
     from openai import OpenAI
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -329,6 +359,18 @@ def score_transcript(candidate: CallCandidate, transcript: str, audio_duration: 
 
 
 def write_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    all_items_by_key: dict[str, dict[str, Any]] = {}
+    for path in SCORED_DIR.glob("*.json"):
+        try:
+            item = json.loads(path.read_text(encoding="utf-8"))
+            key = f"{item.get('lead_id')}:{item.get('note_id')}"
+            all_items_by_key[key] = item
+        except Exception:
+            continue
+    for item in items:
+        key = f"{item.get('lead_id')}:{item.get('note_id')}"
+        all_items_by_key[key] = item
+    items = list(all_items_by_key.values())
     total = len(items)
     avg = round(sum(int(item.get("score") or 0) for item in items) / total, 1) if total else 0
     readiness: dict[str, int] = {}
@@ -369,6 +411,8 @@ def main() -> int:
     parser.add_argument("--lead-limit", type=int, default=80)
     parser.add_argument("--call-limit", type=int, default=5)
     parser.add_argument("--max-seconds", type=int, default=240, help="clip long calls to first N seconds for quick pass")
+    parser.add_argument("--chunk-seconds", type=int, default=600, help="split long/full audio into chunks before transcription")
+    parser.add_argument("--force-rescore", action="store_true", help="overwrite existing call score JSON files")
     parser.add_argument("--download-only", action="store_true")
     args = parser.parse_args()
 
@@ -401,9 +445,9 @@ def main() -> int:
             continue
         clipped = clip_audio(audio, args.max_seconds)
         clipped_duration = media_duration_seconds(clipped)
-        transcription = transcribe_audio(clipped)
+        transcription = transcribe_audio(clipped, chunk_seconds=args.chunk_seconds)
         transcript = transcription.get("text") or ""
-        score = score_transcript(candidate, transcript, clipped_duration)
+        score = score_transcript(candidate, transcript, clipped_duration, force=args.force_rescore)
         scored.append(score)
         print(json.dumps({"stage": "scored", "lead_id": candidate.lead_id, "score": score.get("score"), "readiness": score.get("readiness")}, ensure_ascii=False), flush=True)
     if scored:
