@@ -15,7 +15,8 @@
     "video:ocr": "python3 scripts/video_chat_ocr.py",
     "amocrm:lead-urls": "python3 scripts/amocrm_export_lead_urls.py",
     "amocrm:browser-scrape": "node scripts/amocrm_browser_scrape.js",
-    "video:upload-server": "node scripts/video_upload_server.js"
+    "video:upload-server": "node scripts/video_upload_server.js",
+    "mango:calls": "python3 scripts/analyze_mango_calls.py"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
