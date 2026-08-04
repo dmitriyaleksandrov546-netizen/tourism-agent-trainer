@@ -2,41 +2,54 @@ import { describe, expect, it } from 'vitest';
 import { corpusInsights, evaluateAgentReply, getNextClientReply, getScenarioById } from './simulatorEngine.js';
 
 describe('simulatorEngine', () => {
-  it('finds the family turkey scenario with a realistic starting client brief', () => {
+  it('exposes corpus and methodic sources from calls, Wazzup and training materials', () => {
+    expect(corpusInsights.totalCalls).toBeGreaterThan(2300);
+    expect(corpusInsights.wazzupDialogs).toBeGreaterThan(2300);
+    expect(corpusInsights.trainingMaterials.salesScripts).toBeGreaterThan(10);
+    expect(corpusInsights.rulePacks.map((rule) => rule.id)).toContain('next_step_deadline');
+  });
+
+  it('finds the family turkey scenario with source refs and hidden needs', () => {
     const scenario = getScenarioById('turkey-family-hard');
 
-    expect(scenario.title).toContain('Семья');
+    expect(scenario.shortTitle).toBe('Семья в Турцию');
     expect(scenario.clientProfile.children).toEqual(['2 года', '11 лет']);
-    expect(scenario.startMessage).toContain('180');
+    expect(scenario.sourceRefs.length).toBeGreaterThan(1);
+    expect(scenario.requiredConcepts).toContain('kidsAges');
   });
 
-  it('exposes corpus insights from the OBS call base for the trainer', () => {
-    expect(corpusInsights.totalCalls).toBeGreaterThan(2300);
-    expect(corpusInsights.silenceTriggers[0].label).toContain('поверхностного разговора');
-    expect(corpusInsights.behaviorRules).toContain('Reveal progressively');
+  it('requires scenario-specific relevance, not generic consulting words', () => {
+    const scenario = getScenarioById('turkey-family-hard');
+    const generic = evaluateAgentReply('Уточню бюджет, даты, риски, отзывы и предложу варианты. Сегодня отправлю подборку.', scenario);
+    const relevant = evaluateAgentReply('Понял: младшему 2 года нужен безопасный вход в море, старшему 11 — активности. В 180 тысяч по Турции 5* первая линия будет компромисс: либо проще отель, либо ловим даты. Сегодня до 18:00 отправлю 3 варианта в WhatsApp с плюсами, минусами и отзывами.', scenario);
+
+    expect(relevant.score).toBeGreaterThan(generic.score);
+    expect(relevant.score).toBeGreaterThan(80);
+    expect(generic.missing).toContain('возраст детей и разные потребности');
   });
 
-  it('scores strong agent replies higher when they diagnose, warn about risks and set a next step', () => {
-    const weak = evaluateAgentReply('Берите этот отель, он хороший, всё будет отлично.');
-    const strong = evaluateAgentReply('Уточню возраст детей, бюджет, пляж и питание. Сразу предупрежу по рискам: за 180 тысяч нужна честная вилка вариантов. Предложу 2 отеля и созвон на 10 минут, чтобы зафиксировать бронь.');
+  it('penalizes keyword stuffing and dangerous promises', () => {
+    const scenario = getScenarioById('uae-premium-anxious');
+    const spam = evaluateAgentReply('Бюджет риск варианты созвон дети честно проверю отзывы цена бронь.', scenario);
+    const promise = evaluateAgentReply('Гарантирую идеальный вариант без сюрпризов, точно понравится.', scenario);
 
-    expect(strong.score).toBeGreaterThan(weak.score);
-    expect(strong.detected).toContain('diagnosis');
-    expect(strong.detected).toContain('riskHonesty');
-    expect(strong.detected).toContain('nextStep');
+    expect(spam.score).toBeLessThan(35);
+    expect(spam.verdict).toContain('слова есть');
+    expect(promise.score).toBeLessThan(35);
+    expect(promise.penalties.map((item) => item.key)).toContain('dangerousPromise');
   });
 
-  it('penalizes keyword stuffing that has buzzwords but no real answer', () => {
-    const spam = evaluateAgentReply('Бюджет риск варианты созвон дети честно проверю отзывы цена бронь.');
-    const useful = evaluateAgentReply('Понял: двое взрослых и двое детей, младшему важен безопасный вход в море, старшему — активности. В 180 тысяч первая линия 5* без толпы почти наверняка будет компромиссом: либо отель проще, либо даты ловим. Я проверю свежие отзывы и дам три варианта с минусами: в бюджет, комфортнее и безопаснее для детей. После этого созвон на 10 минут и фиксируем следующий шаг.');
+  it('returns UI evidence, missing items and top fixes instead of only hits', () => {
+    const scenario = getScenarioById('egypt-budget-objections');
+    const result = evaluateAgentReply('Давайте сравним не только цену: риф, пляж, номер, рейс и что входит. Дешевле может быть с риском, нормальный риф — чуть дороже. Сегодня до 17:00 пришлю 3 варианта.', scenario);
 
-    expect(spam.score).toBeLessThan(50);
-    expect(spam.verdict).toContain('слишком поверхностно');
-    expect(useful.score).toBeGreaterThan(78);
+    expect(result.dimensions[0]).toHaveProperty('status');
+    expect(result.topFixes.length).toBeLessThanOrEqual(3);
+    expect(result.corpusSignals.length).toBeGreaterThan(0);
   });
 
-  it('uses corpus-backed silence logic for vague answers without concrete next step', () => {
-    const reply = getNextClientReply('turkey-family-hard', 'Да, хороший вариант, посмотрим и подберём.', 1);
+  it('client reply follows the most critical missed methodic', () => {
+    const reply = getNextClientReply('turkey-family-hard', 'Я подберу хороший отель, вам понравится.', 1);
 
     expect(reply).toContain('общими словами');
     expect(reply).toContain('бюджет');

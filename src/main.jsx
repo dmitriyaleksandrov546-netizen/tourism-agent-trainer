@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowRight, BarChart3, CheckCircle2, MessageCircle, RefreshCw, Send, ShieldAlert } from 'lucide-react';
-import { corpusInsights, createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import './styles.css';
 
 function App() {
@@ -11,7 +10,8 @@ function App() {
   const [lastEvaluation, setLastEvaluation] = useState(null);
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
-  const corpusArchetype = corpusInsights.mainArchetypes.find((item) => item.id === activeScenario.archetype) || corpusInsights.mainArchetypes[0];
+  const clientMessage = messages.find((message) => message.role === 'client')?.text || activeScenario.startMessage;
+  const lastClientReply = messages.filter((message) => message.role === 'client').at(-1)?.text;
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
@@ -20,154 +20,134 @@ function App() {
     setLastEvaluation(null);
   };
 
+  const resetAttempt = () => {
+    setMessages(createInitialMessages(activeScenarioId));
+    setDraft('');
+    setLastEvaluation(null);
+  };
+
   const sendReply = () => {
     const text = draft.trim();
     if (!text) return;
 
-    const evaluation = evaluateAgentReply(text);
+    const evaluation = evaluateAgentReply(text, activeScenario);
     const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1);
-    const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
     setMessages((current) => [
       ...current,
-      { id: `agent-${current.length}`, role: 'agent', text, time: now },
-      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'нейроклиент' }
+      { id: `agent-${current.length}`, role: 'agent', text, time: 'ваш ответ' },
+      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'ответ клиента' }
     ]);
     setLastEvaluation(evaluation);
     setDraft('');
   };
 
   return (
-    <main className="page">
-      <section className="hero">
+    <main className="app">
+      <header className="top">
         <div>
-          <p className="eyebrow">T‑Trainer · тренажёр турагента</p>
-          <h1>Научись отвечать сложному клиенту так, чтобы он не пропал</h1>
-          <p className="lead">Система проверяет не набор слов, а логику ответа: понял ли агент клиента, честно ли объяснил риски и зафиксировал ли следующий шаг.</p>
+          <p className="kicker">Тренажёр турагента</p>
+          <h1>Ответьте клиенту. Получите короткий разбор.</h1>
         </div>
-        <div className="scoreHero">
-          <span>балл</span>
-          <b>{lastEvaluation?.score ?? '—'}</b>
-          <small>{lastEvaluation?.verdict ?? 'ответ ещё не отправлен'}</small>
-        </div>
-      </section>
+        {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
+      </header>
 
-      <section className="simpleGrid">
-        <aside className="panel scenarioPanel">
-          <div className="panelTitle">
-            <MessageCircle size={20} />
-            <div>
-              <p className="eyebrow">Шаг 1</p>
-              <h2>Выбери клиента</h2>
-            </div>
-          </div>
-          <div className="scenarioList">
+      <section className="layout">
+        <section className="card situations">
+          <h2>1. Выберите ситуацию</h2>
+          <div className="situationList">
             {scenarios.map((scenario) => (
-              <button key={scenario.id} className={`scenarioCard ${scenario.id === activeScenarioId ? 'active' : ''}`} onClick={() => selectScenario(scenario.id)}>
-                <b>{scenario.title}</b>
-                <span>{scenario.level} · {scenario.direction}</span>
+              <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                <b>{scenario.shortTitle}</b>
+                <span>{scenario.shortSubtitle}</span>
               </button>
             ))}
           </div>
-
-          <div className="corpusMini">
-            <BarChart3 size={18} />
-            <div>
-              <b>Основано на {corpusInsights.totalCalls} звонках</b>
-              <p>{corpusArchetype.label}: {corpusArchetype.trigger}</p>
-            </div>
-          </div>
-        </aside>
-
-        <section className="panel trainerPanel">
-          <div className="trainerHeader">
-            <div>
-              <p className="eyebrow">Шаг 2</p>
-              <h2>{activeScenario.title}</h2>
-            </div>
-            <button className="secondary" onClick={() => selectScenario(activeScenarioId)}><RefreshCw size={16} /> Сначала</button>
-          </div>
-
-          <div className="clientNeed">
-            <b>Что важно клиенту:</b>
-            <span>{activeScenario.clientProfile.hiddenNeed}</span>
-          </div>
-
-          <div className="chat">
-            {messages.map((message) => (
-              <article key={message.id} className={`message ${message.role}`}>
-                <span>{message.role === 'client' ? 'Клиент' : 'Агент'}</span>
-                <p>{message.text}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="composer">
-            <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Напиши ответ клиенту: что понял, что уточнишь, какие риски, какие варианты и следующий шаг." onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') sendReply();
-            }} />
-            <button onClick={sendReply}>Проверить ответ <Send size={18} /></button>
-          </div>
         </section>
 
-        <aside className="panel resultPanel">
-          <div className="panelTitle">
-            <CheckCircle2 size={20} />
-            <div>
-              <p className="eyebrow">Шаг 3</p>
-              <h2>Разбор</h2>
-            </div>
+        <section className="card trainer">
+          <div className="sectionHead">
+            <h2>2. Ответьте клиенту</h2>
+            <button className="ghost" onClick={resetAttempt}>Очистить</button>
           </div>
 
-          {!lastEvaluation && <EmptyResult />}
-          {lastEvaluation && <Result evaluation={lastEvaluation} />}
-        </aside>
+          <p className="label">Клиент пишет:</p>
+          <article className="clientText">{clientMessage}</article>
+
+          <label className="answerBox">
+            <span>Напишите ответ как в WhatsApp.</span>
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Например: понимаю задачу, уточню детали, честно скажу про риски и предложу следующий шаг."
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') sendReply();
+              }}
+            />
+          </label>
+
+          <button className="primary" onClick={sendReply}>Проверить</button>
+
+          {lastEvaluation && <ClientPushback text={lastClientReply} />}
+          {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
+        </section>
       </section>
     </main>
   );
 }
 
-function EmptyResult() {
+function ClientPushback({ text }) {
+  if (!text) return null;
   return (
-    <div className="emptyResult">
-      <ShieldAlert size={32} />
-      <b>Ответ ещё не проверен</b>
-      <p>После отправки здесь будет коротко: что хорошо, что слабо и почему клиент может пропасть.</p>
-    </div>
+    <section className="clientPushback">
+      <p className="label">Клиент после вашего ответа:</p>
+      <article>{text}</article>
+    </section>
   );
 }
 
-function Result({ evaluation }) {
-  const visibleDetails = evaluation.details.filter((item) => item.earned > 0 || ['diagnosis', 'riskHonesty', 'contextReading', 'nextStep'].includes(item.key));
+function Review({ evaluation, scenario }) {
+  const good = evaluation.dimensions.filter((item) => item.status === 'good').slice(0, 3);
+  const fixes = evaluation.topFixes.slice(0, 3);
+  const example = buildBetterExample(evaluation, scenario);
+  const label = evaluation.score >= 80 ? 'Хорошо' : evaluation.score >= 55 ? 'Нужно доработать' : 'Клиент может пропасть';
+
   return (
-    <div className="resultStack">
-      <div className={`scoreCard ${evaluation.score >= 78 ? 'good' : evaluation.score >= 52 ? 'mid' : 'bad'}`}>
-        <b>{evaluation.score}</b>
-        <span>{evaluation.verdict}</span>
+    <section className={`review ${evaluation.score >= 80 ? 'good' : evaluation.score >= 55 ? 'mid' : 'bad'}`}>
+      <div className="reviewTop">
+        <h2>Разбор ответа</h2>
+        <span>{evaluation.score} из 100</span>
       </div>
+      <h3>Оценка: {label}</h3>
 
-      <div className="checks">
-        {visibleDetails.map((item) => (
-          <div key={item.key}>
-            <span>{item.label}</span>
-            <b>{item.earned}/{item.max}</b>
-          </div>
-        ))}
-      </div>
-
-      <div className="advice">
-        <h3>Что исправить</h3>
-        {evaluation.advice.slice(0, 3).map((item) => <p key={item}><ArrowRight size={15} /> {item}</p>)}
-      </div>
-
-      {!!evaluation.corpusSignals.length && (
-        <div className="corpusSignals">
-          <h3>Сигналы из корпуса</h3>
-          {evaluation.corpusSignals.slice(0, 2).map((item) => <p key={item}>{item}</p>)}
+      {!!good.length && (
+        <div className="reviewBlock">
+          <b>Что хорошо:</b>
+          {good.map((item) => <p key={item.key}>✓ {item.label}</p>)}
         </div>
       )}
-    </div>
+
+      <div className="reviewBlock">
+        <b>Что исправить:</b>
+        {fixes.length ? fixes.map((item) => <p key={item}>✕ {item}</p>) : <p>✓ Критичных пробелов нет. Можно сделать ответ короче и конкретнее.</p>}
+      </div>
+
+      <div className="reviewBlock example">
+        <b>Попробуйте так:</b>
+        <p>{example}</p>
+      </div>
+    </section>
   );
+}
+
+function buildBetterExample(evaluation, scenario) {
+  if (scenario.id === 'turkey-family-hard') {
+    return 'Понимаю задачу. Чтобы не предложить неподходящий отель, уточню даты и что важнее: безопасный вход в море для младшего или аквапарк для старшего. В 180 тысяч будет компромисс, поэтому сегодня до 18:00 пришлю 3 варианта с плюсами, минусами и отзывами.';
+  }
+  if (scenario.id === 'egypt-budget-objections') {
+    return 'Давайте сравним не только цену, а что входит: рейс, номер, пляж, риф и отзывы. Дешевле может быть с риском, нормальный риф — чуть дороже. Сегодня до 17:00 пришлю 3 варианта и покажу разницу.';
+  }
+  return 'Я не буду обещать без проверки. Сначала сверю стройку рядом, депозит, пляж и свежие отзывы по источникам. Сегодня до 18:00 пришлю 2–3 варианта с фактами, рисками и выводом, какой безопаснее именно для вас.';
 }
 
 createRoot(document.getElementById('root')).render(<App />);
