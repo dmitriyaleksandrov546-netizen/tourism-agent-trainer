@@ -1,36 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  Bot,
-  Brain,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardCheck,
-  GraduationCap,
-  LayoutDashboard,
-  Menu,
-  MessageSquareText,
-  Play,
-  Send,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  UserRound,
-  UsersRound
-} from 'lucide-react';
-import { createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { corpusInsights, createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import './styles.css';
 
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeScenarioId, setActiveScenarioId] = useState('turkey-family-hard');
   const [messages, setMessages] = useState(() => createInitialMessages('turkey-family-hard'));
   const [draft, setDraft] = useState('');
   const [lastEvaluation, setLastEvaluation] = useState(null);
-  const [mode, setMode] = useState('agent');
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
+  const clientMessage = messages.find((message) => message.role === 'client')?.text || activeScenario.startMessage;
+  const lastClientReply = messages.filter((message) => message.role === 'client').at(-1)?.text;
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
@@ -39,207 +20,157 @@ function App() {
     setLastEvaluation(null);
   };
 
+  const resetAttempt = () => {
+    setMessages(createInitialMessages(activeScenarioId));
+    setDraft('');
+    setLastEvaluation(null);
+  };
+
   const sendReply = () => {
     const text = draft.trim();
     if (!text) return;
 
-    const evaluation = evaluateAgentReply(text);
+    const evaluation = evaluateAgentReply(text, activeScenario);
     const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1);
-    const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
     setMessages((current) => [
       ...current,
-      { id: `agent-${current.length}`, role: 'agent', text, time: now },
-      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'нейроклиент' }
+      { id: `agent-${current.length}`, role: 'agent', text, time: 'ваш ответ' },
+      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'ответ клиента' }
     ]);
     setLastEvaluation(evaluation);
     setDraft('');
   };
 
-  const quickInsert = (text) => {
-    setDraft((current) => (current ? `${current}\n${text}` : text));
-  };
-
   return (
-    <div className="appShell">
-      <aside className={`sidebar ${sidebarOpen ? 'expanded' : 'collapsed'}`}>
-        <button className="sidebarToggle" onClick={() => setSidebarOpen((value) => !value)} aria-label="Открыть меню">
-          {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
-        </button>
-
-        <div className="brandBlock">
-          <div className="brandIcon"><Sparkles size={20} /></div>
-          {sidebarOpen && <div><b>Agent Bootcamp</b><span>адаптация турагентов</span></div>}
+    <main className="app">
+      <header className="top">
+        <div>
+          <p className="kicker">Тренажёр турагента</p>
+          <h1>Ответьте клиенту. Получите короткий разбор.</h1>
         </div>
+        {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
+      </header>
 
-        <nav className="navList">
-          <NavItem icon={<LayoutDashboard size={19} />} label="Дашборд" active={false} open={sidebarOpen} />
-          <NavItem icon={<Bot size={19} />} label="Тренажёр" active open={sidebarOpen} />
-          <NavItem icon={<Building2 size={19} />} label="Отели" active={false} open={sidebarOpen} />
-          <NavItem icon={<ClipboardCheck size={19} />} label="Тесты" active={false} open={sidebarOpen} />
-          <NavItem icon={<UsersRound size={19} />} label="Агенты" active={false} open={sidebarOpen} />
-          <NavItem icon={<Settings size={19} />} label="Админка" active={false} open={sidebarOpen} />
-        </nav>
-
-        <div className="accountCard">
-          <div className="avatar">ДА</div>
-          {sidebarOpen && <div><b>Демо-аккаунт</b><span>руководитель</span></div>}
-        </div>
-      </aside>
-
-      <main className="mainArea">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Раздел / Тренажёр нейроклиента</p>
-            <h1>Отработка сложных клиентов до выхода на реальные заявки</h1>
+      <section className="layout">
+        <section className="card situations">
+          <h2>1. Выберите ситуацию</h2>
+          <div className="situationList">
+            {scenarios.map((scenario) => (
+              <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                <b>{scenario.shortTitle}</b>
+                <span>{scenario.shortSubtitle}</span>
+              </button>
+            ))}
           </div>
-          <div className="modeSwitch" role="tablist" aria-label="Режим">
-            <button className={mode === 'agent' ? 'active' : ''} onClick={() => setMode('agent')}><UserRound size={16} /> Агент</button>
-            <button className={mode === 'admin' ? 'active' : ''} onClick={() => setMode('admin')}><ShieldCheck size={16} /> Руководитель</button>
-          </div>
-        </header>
-
-        <section className="heroStrip">
-          <div>
-            <span className="pill"><Brain size={15} /> Neuroclient v0.1</span>
-            <h2>{mode === 'admin' ? 'Видно, кто готов к клиентам, а кто сольёт заявку' : 'Тренируйся на самых неприятных запросах без риска потерять клиента'}</h2>
-            <p>Сценарий строится вокруг семьи, бюджета, отеля, возражений и скрытых критериев. После каждого ответа — оценка по продажам и честности.</p>
-          </div>
-          <div className="heroMetric"><b>{lastEvaluation?.score ?? 0}</b><span>текущий балл</span></div>
+          <CorpusPanel />
         </section>
 
-        <section className="workspaceGrid">
-          <div className="panel scenarioPanel">
-            <div className="panelHead">
-              <div>
-                <p className="eyebrow">Сценарии</p>
-                <h3>Выбери тренировку</h3>
-              </div>
-              <span className="counter">{scenarios.length}</span>
-            </div>
-            <div className="scenarioList">
-              {scenarios.map((scenario) => (
-                <button key={scenario.id} className={`scenarioCard ${scenario.id === activeScenarioId ? 'active' : ''}`} onClick={() => selectScenario(scenario.id)}>
-                  <span>{scenario.level}</span>
-                  <b>{scenario.title}</b>
-                  <small>{scenario.direction} · {scenario.duration}</small>
-                </button>
-              ))}
-            </div>
-
-            <div className="adminBox">
-              <p className="eyebrow">Первая итерация админки</p>
-              <div className="adminRows">
-                <span>Программа: испытательный срок 10 дней</span>
-                <span>Агент: новый менеджер</span>
-                <span>Статус: тренировка не сдана</span>
-              </div>
-            </div>
+        <section className="card trainer">
+          <div className="sectionHead">
+            <h2>2. Ответьте клиенту</h2>
+            <button className="ghost" onClick={resetAttempt}>Очистить</button>
           </div>
 
-          <div className="panel chatPanel">
-            <div className="chatHeader">
-              <div>
-                <p className="eyebrow">Активный диалог</p>
-                <h3>{activeScenario.title}</h3>
-              </div>
-              <button className="ghostButton" onClick={() => selectScenario(activeScenarioId)}><Play size={15} /> Перезапустить</button>
-            </div>
+          <p className="label">Клиент пишет:</p>
+          <article className="clientText">{clientMessage}</article>
 
-            <div className="briefCard">
-              <div><b>Клиент:</b> {activeScenario.clientProfile.name}, {activeScenario.clientProfile.family}</div>
-              <div><b>Скрытая боль:</b> {activeScenario.clientProfile.hiddenNeed}</div>
-              <div><b>Триггер:</b> {activeScenario.clientProfile.trigger}</div>
-            </div>
-
-            <div className="messagesArea">
-              {messages.map((message) => (
-                <div key={message.id} className={`messageRow ${message.role}`}>
-                  <div className="bubble">
-                    <span>{message.role === 'client' ? 'Нейроклиент' : 'Агент'}</span>
-                    <p>{message.text}</p>
-                    <small>{message.time}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="quickBar">
-              <button onClick={() => quickInsert('Уточню возраст детей, бюджет, даты, пляж, питание и что для вас критично, а где готовы к компромиссу.')}>+ Уточнить потребности</button>
-              <button onClick={() => quickInsert('Сразу честно предупрежу по рискам и проверю отзывы по свежим датам, чтобы не обещать лишнего.')}>+ Риски</button>
-              <button onClick={() => quickInsert('Предложу 2–3 варианта: в бюджет, комфортнее и самый безопасный для семьи.')}>+ Вилка отелей</button>
-            </div>
-
-            <div className="composer">
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Напиши ответ клиенту. Система оценит: вопросы, честность, возражения, следующий шаг." onKeyDown={(event) => {
+          <label className="answerBox">
+            <span>Напишите ответ как в WhatsApp.</span>
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Например: понимаю задачу, уточню детали, честно скажу про риски и предложу следующий шаг."
+              onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') sendReply();
-              }} />
-              <button onClick={sendReply}><Send size={18} /> Ответить</button>
-            </div>
-          </div>
+              }}
+            />
+          </label>
 
-          <aside className="sideStack">
-            <div className="panel scorePanel">
-              <div className="panelHead">
-                <div>
-                  <p className="eyebrow">Оценка ответа</p>
-                  <h3>{lastEvaluation ? lastEvaluation.verdict : 'Ждём первый ответ'}</h3>
-                </div>
-                <div className={`scoreBadge ${(lastEvaluation?.score ?? 0) >= 78 ? 'good' : (lastEvaluation?.score ?? 0) >= 52 ? 'mid' : ''}`}>{lastEvaluation?.score ?? '—'}</div>
-              </div>
-              <div className="rubricList">
-                {(lastEvaluation?.details ?? []).map((item) => (
-                  <div key={item.key} className="rubricItem">
-                    <span>{item.label}</span>
-                    <b>{item.earned}/{item.max}</b>
-                  </div>
-                ))}
-                {!lastEvaluation && <p className="muted">После ответа здесь появится разбор: что агент сделал хорошо и что упустил.</p>}
-              </div>
-              {lastEvaluation && <div className="adviceBox">{lastEvaluation.advice.map((item) => <p key={item}>• {item}</p>)}</div>}
-            </div>
+          <button className="primary" onClick={sendReply}>Проверить</button>
 
-            <div className="panel hotelsPanel">
-              <div className="panelHead">
-                <div>
-                  <p className="eyebrow">База отелей в контексте</p>
-                  <h3>Что можно использовать</h3>
-                </div>
-                <MessageSquareText size={18} />
-              </div>
-              <div className="hotelList">
-                {activeScenario.hotelContext.map((hotel) => (
-                  <article key={hotel.name}>
-                    <b>{hotel.name}</b>
-                    <p><span>Кому подходит:</span> {hotel.fit}</p>
-                    <p><span>Риск:</span> {hotel.risk}</p>
-                    <small>{hotel.source} · уверенность: {hotel.confidence}</small>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="panel objectivesPanel">
-              <div className="panelHead">
-                <div>
-                  <p className="eyebrow">Цели тренировки</p>
-                  <h3>Что должен сделать агент</h3>
-                </div>
-                <GraduationCap size={18} />
-              </div>
-              <ul>
-                {activeScenario.objectives.map((objective) => <li key={objective}>{objective}</li>)}
-              </ul>
-            </div>
-          </aside>
+          {lastEvaluation && <ClientPushback text={lastClientReply} />}
+          {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
         </section>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
 
-function NavItem({ icon, label, active, open }) {
-  return <button className={`navItem ${active ? 'active' : ''}`}>{icon}{open && <span>{label}</span>}</button>;
+function CorpusPanel() {
+  const coverage = corpusInsights.sourceCoverage || {};
+  const topTriggers = corpusInsights.silenceTriggers?.slice(0, 2) || [];
+
+  return (
+    <section className="corpusPanel" aria-label="Источник методики">
+      <p className="corpusTitle">Методика основана на корпусе</p>
+      <div className="corpusStats">
+        <span><b>{corpusInsights.totalCalls}</b> звонков</span>
+        <span><b>{coverage.wazzupDealFiles || corpusInsights.wazzupDialogs}</b> Wazzup</span>
+        <span><b>{coverage.trainingMaterials || corpusInsights.trainingMaterials.total}</b> материалов</span>
+      </div>
+      <p className="corpusNote">Средний балл реальных звонков: {corpusInsights.averageScore}/100. Тренажёр проверяет не “красивые слова”, а действия, которые снижают риск потери клиента.</p>
+      <div className="corpusTriggers">
+        {topTriggers.map((trigger) => (
+          <p key={trigger.label}>⚠ {trigger.label} — {trigger.share}%</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ClientPushback({ text }) {
+  if (!text) return null;
+  return (
+    <section className="clientPushback">
+      <p className="label">Клиент после вашего ответа:</p>
+      <article>{text}</article>
+    </section>
+  );
+}
+
+function Review({ evaluation, scenario }) {
+  const good = evaluation.dimensions.filter((item) => item.status === 'good').slice(0, 3);
+  const fixes = evaluation.topFixes.slice(0, 3);
+  const example = buildBetterExample(evaluation, scenario);
+  const label = evaluation.score >= 80 ? 'Хорошо' : evaluation.score >= 55 ? 'Нужно доработать' : 'Клиент может пропасть';
+
+  return (
+    <section className={`review ${evaluation.score >= 80 ? 'good' : evaluation.score >= 55 ? 'mid' : 'bad'}`}>
+      <div className="reviewTop">
+        <h2>Разбор ответа</h2>
+        <span>{evaluation.score} из 100</span>
+      </div>
+      <h3>Оценка: {label}</h3>
+
+      {!!good.length && (
+        <div className="reviewBlock">
+          <b>Что хорошо:</b>
+          {good.map((item) => <p key={item.key}>✓ {item.label}</p>)}
+        </div>
+      )}
+
+      <div className="reviewBlock">
+        <b>Что исправить:</b>
+        {fixes.length ? fixes.map((item) => <p key={item}>✕ {item}</p>) : <p>✓ Критичных пробелов нет. Можно сделать ответ короче и конкретнее.</p>}
+      </div>
+
+      <div className="reviewBlock example">
+        <b>Попробуйте так:</b>
+        <p>{example}</p>
+      </div>
+    </section>
+  );
+}
+
+function buildBetterExample(evaluation, scenario) {
+  if (scenario.id === 'turkey-family-hard') {
+    return 'Понимаю задачу. Чтобы не предложить неподходящий отель, уточню даты и что важнее: безопасный вход в море для младшего или аквапарк для старшего. В 180 тысяч будет компромисс, поэтому сегодня до 18:00 пришлю 3 варианта с плюсами, минусами и отзывами.';
+  }
+  if (scenario.id === 'egypt-budget-objections') {
+    return 'Давайте сравним не только цену, а что входит: рейс, номер, пляж, риф и отзывы. Дешевле может быть с риском, нормальный риф — чуть дороже. Сегодня до 17:00 пришлю 3 варианта и покажу разницу.';
+  }
+  return 'Я не буду обещать без проверки. Сначала сверю стройку рядом, депозит, пляж и свежие отзывы по источникам. Сегодня до 18:00 пришлю 2–3 варианта с фактами, рисками и выводом, какой безопаснее именно для вас.';
 }
 
 createRoot(document.getElementById('root')).render(<App />);
