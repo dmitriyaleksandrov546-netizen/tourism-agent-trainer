@@ -36,6 +36,14 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .situationList button.active { border-color: var(--green); background: #e6f7ef; box-shadow: inset 0 0 0 1px rgba(11,132,99,.16); }
 .situationList b { display: block; margin-bottom: 4px; font-size: 16px; }
 .situationList span { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
+.corpusPanel { margin-top: 14px; padding: 14px; border-radius: 16px; background: #f8faf8; border: 1px solid var(--line); }
+.corpusTitle { margin: 0 0 10px; font-size: 13px; color: var(--green-dark); font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
+.corpusStats { display: grid; gap: 8px; }
+.corpusStats span { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 12px; background: #fff; color: var(--muted); font-size: 13px; }
+.corpusStats b { color: var(--ink); font-size: 15px; }
+.corpusNote { margin: 12px 0 0; color: #33443d; font-size: 13px; line-height: 1.38; }
+.corpusTriggers { display: grid; gap: 6px; margin-top: 10px; }
+.corpusTriggers p { margin: 0; color: #6b491b; font-size: 12px; line-height: 1.35; }
 
 .trainer { padding: 0; overflow: hidden; }
 .sectionHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 0; }

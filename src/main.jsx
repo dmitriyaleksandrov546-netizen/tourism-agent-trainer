@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { corpusInsights, createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import './styles.css';
 
 function App() {
@@ -63,6 +63,7 @@ function App() {
               </button>
             ))}
           </div>
+          <CorpusPanel />
         </section>
 
         <section className="card trainer">
@@ -93,6 +94,28 @@ function App() {
         </section>
       </section>
     </main>
+  );
+}
+
+function CorpusPanel() {
+  const coverage = corpusInsights.sourceCoverage || {};
+  const topTriggers = corpusInsights.silenceTriggers?.slice(0, 2) || [];
+
+  return (
+    <section className="corpusPanel" aria-label="Источник методики">
+      <p className="corpusTitle">Методика основана на корпусе</p>
+      <div className="corpusStats">
+        <span><b>{corpusInsights.totalCalls}</b> звонков</span>
+        <span><b>{coverage.wazzupDealFiles || corpusInsights.wazzupDialogs}</b> Wazzup</span>
+        <span><b>{coverage.trainingMaterials || corpusInsights.trainingMaterials.total}</b> материалов</span>
+      </div>
+      <p className="corpusNote">Средний балл реальных звонков: {corpusInsights.averageScore}/100. Тренажёр проверяет не “красивые слова”, а действия, которые снижают риск потери клиента.</p>
+      <div className="corpusTriggers">
+        {topTriggers.map((trigger) => (
+          <p key={trigger.label}>⚠ {trigger.label} — {trigger.share}%</p>
+        ))}
+      </div>
+    </section>
   );
 }
 
