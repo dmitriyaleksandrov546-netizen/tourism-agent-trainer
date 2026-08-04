@@ -7,6 +7,9 @@ describe('simulatorEngine', () => {
     expect(corpusInsights.wazzupDialogs).toBeGreaterThan(2300);
     expect(corpusInsights.trainingMaterials.salesScripts).toBeGreaterThan(10);
     expect(corpusInsights.rulePacks.map((rule) => rule.id)).toContain('next_step_deadline');
+    expect(corpusInsights.sourceCoverage.calls).toBeGreaterThan(2300);
+    expect(corpusInsights.sourceCoverage.trainingMaterials).toBe(28);
+    expect(corpusInsights.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
 
   it('finds the family turkey scenario with source refs and hidden needs', () => {
