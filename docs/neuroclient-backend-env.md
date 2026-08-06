@@ -1,6 +1,26 @@
 # Neuroclient backend env
 
+Recommended deployment target for the MVP: **Render Web Service** from `render.yaml`.
+It runs the Node backend and serves the built frontend from the same domain, so `/api/neuroclient` works without a separate frontend/backend split.
+
 The frontend must never receive provider API keys. Put secrets only on the backend host that runs `server.js`.
+
+## Render setup
+
+1. Create a Render Blueprint/Web Service from this GitHub repo.
+2. Use `render.yaml` from the repo root.
+3. Set the secret env var in Render UI:
+
+```bash
+OPENAI_API_KEY=<set in Render secret storage>
+```
+
+4. Deploy and check:
+
+```bash
+curl https://<render-service>.onrender.com/api/neuroclient/health
+```
+
 
 ## OpenAI-compatible default
 
