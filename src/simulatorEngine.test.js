@@ -71,4 +71,15 @@ describe('simulatorEngine', () => {
     expect(result.score).toBe(0);
     expect(result.verdict).toContain('грубость');
   });
+
+  it('penalizes keyword stuffing instead of rewarding method words without logic', () => {
+    const spam = evaluateAgentReply('Бюджет риск варианты созвон дети честно проверю отзывы цена бронь.', 'turkey-family-hard');
+    const strong = evaluateAgentReply('Понимаю: младшему 2 года нужен безопасный вход в море, старшему 11 — активности. В бюджет 180 будет компромисс, поэтому сегодня вечером пришлю 2–3 варианта с плюсами, минусами и отзывами.', 'turkey-family-hard');
+
+    expect(spam.score).toBeLessThan(35);
+    expect(spam.verdict).toContain('слова есть');
+    expect(strong.score).toBeGreaterThan(spam.score);
+    expect(strong.detected).toContain('risk');
+    expect(strong.detected).toContain('nextStep');
+  });
 });

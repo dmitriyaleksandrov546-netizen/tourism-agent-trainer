@@ -101,87 +101,126 @@ export const scenarios = [
   }
 ];
 
-const rubric = [
-  {
-    key: 'needs',
+const conceptRules = {
+  needs: {
     label: 'Выявление потребностей',
     points: 18,
-    patterns: ['уточн', 'возраст', 'дет', 'важно', 'критич', 'пляж', 'питани', 'бюджет', 'состав', 'даты']
+    patterns: ['уточн', 'возраст', 'дет', 'важно', 'критич', 'пляж', 'питани', 'бюджет', 'состав', 'даты', 'район', 'депозит']
   },
-  {
-    key: 'risk',
+  risk: {
     label: 'Честность и риски',
     points: 18,
-    patterns: ['риск', 'предупреж', 'чест', 'компромисс', 'не обещ', 'может не', 'отзывы', 'провер']
+    patterns: ['риск', 'минус', 'предупреж', 'чест', 'компромисс', 'не обещ', 'может не', 'отзывы', 'провер', 'подвох']
   },
-  {
-    key: 'value',
+  value: {
     label: 'Ценность агента',
     points: 14,
-    patterns: ['сопровожд', 'проверю', 'сравн', 'подбер', 'источник', 'актуальн', 'помогу']
+    patterns: ['сопровожд', 'проверю', 'сверю', 'сравн', 'источник', 'актуальн', 'оператор', 'помогу']
   },
-  {
-    key: 'alternatives',
+  alternatives: {
     label: 'Альтернативы',
     points: 14,
-    patterns: ['вариант', 'альтернатив', '2 отел', '3 отел', 'вилка', 'дороже', 'дешевле']
+    patterns: ['вариант', 'альтернатив', '2 отел', '3 отел', '2–3', 'вилка', 'дороже', 'дешевле', 'комфортнее']
   },
-  {
-    key: 'objection',
+  objection: {
     label: 'Работа с возражением',
     points: 12,
-    patterns: ['понимаю', 'давайте сравним', 'разница', 'не спор', 'соглас', 'посмотрим']
+    patterns: ['понимаю', 'давайте сравним', 'разница', 'не спор', 'соглас', 'посмотрим', 'по-честному']
   },
-  {
-    key: 'nextStep',
+  nextStep: {
     label: 'Следующий шаг',
     points: 14,
-    patterns: ['созвон', 'бронь', 'предоплат', 'зафикс', 'отправлю', '10 минут', 'следующий шаг']
+    patterns: ['созвон', 'бронь', 'предоплат', 'зафикс', 'отправлю', 'пришлю', 'сегодня', 'вечером', 'завтра', 'до 17', 'до 18', '10 минут', 'whatsapp', 'вотсап']
   },
-  {
-    key: 'tone',
+  tone: {
     label: 'Тон без канцелярита',
     points: 10,
-    patterns: ['давайте', 'сразу', 'спокойно', 'по-честному', 'коротко']
+    patterns: ['понимаю', 'давайте', 'сразу', 'спокойно', 'по-честному', 'коротко', 'ок', 'хорошо']
   }
-];
+};
+
+const scenarioRequiredSignals = {
+  'turkey-family-hard': {
+    needs: ['2 года', '11 лет', 'младш', 'старш', 'дет'],
+    risk: ['вход в море', 'пляж', 'отзывы', 'компромисс'],
+    alternatives: ['180', 'бюджет', 'вилка', 'вариант']
+  },
+  'egypt-budget-objections': {
+    objection: ['дешевле', 'разница', 'сравн', 'конкурент'],
+    risk: ['риф', 'пляж', 'понтон', 'ветер', 'номер', 'рейс'],
+    value: ['проверю', 'сверю', 'источник', 'оператор']
+  },
+  'uae-premium-anxious': {
+    needs: ['дубай', 'район', 'пляж', 'депозит'],
+    risk: ['стройк', 'депозит', 'пляж через дорогу', 'не обещ', 'провер'],
+    value: ['источник', 'сайт отеля', 'актуальн', 'провер']
+  }
+};
 
 export function getScenarioById(id) {
   return scenarios.find((scenario) => scenario.id === id) || scenarios[0];
 }
 
 const rudePatterns = ['блять', 'бляд', 'сука', 'нахуй', 'хуй', 'пизд', 'еба', 'ёба', 'заеб', 'мудак', 'идиот'];
+const dangerousPromisePatterns = ['гарантирую', 'точно понравится', 'без проблем', 'идеально', '100%', 'лучший отель'];
+const logicMarkers = ['потому', 'поэтому', 'если', 'либо', 'значит', 'в вашем случае', 'для вас', 'чтобы', 'так как'];
+const stuffingPatterns = ['бюджет', 'риск', 'варианты', 'созвон', 'дети', 'честно', 'проверю', 'отзывы', 'цена', 'бронь'];
 
 function hasRudeTone(text = '') {
   const normalized = text.toLowerCase();
   return rudePatterns.some((pattern) => normalized.includes(pattern));
 }
 
+function countWords(text = '') {
+  return text.replace(/[.,!?;:()«»“”]/g, ' ').split(/\s+/).filter(Boolean).length;
+}
+
+function hasAny(text = '', patterns = []) {
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function isKeywordStuffing(normalized = '') {
+  const hits = stuffingPatterns.filter((pattern) => normalized.includes(pattern)).length;
+  return hits >= 6 && !hasAny(normalized, logicMarkers) && countWords(normalized) <= 24;
+}
+
+function scoreRule(normalized, key, scenario) {
+  const rule = conceptRules[key];
+  const hits = rule.patterns.filter((pattern) => normalized.includes(pattern));
+  const scenarioHits = (scenarioRequiredSignals[scenario.id]?.[key] || []).filter((pattern) => normalized.includes(pattern));
+  const hasLogic = hasAny(normalized, logicMarkers) || key === 'nextStep' || key === 'tone';
+  let multiplier = hits.length ? 0.7 : 0;
+  if (key === 'nextStep' && hits.length) multiplier = 1;
+  if (scenarioHits.length) multiplier = 1;
+  if (hits.length && !hasLogic) multiplier *= 0.6;
+
+  const earned = Math.round(rule.points * multiplier);
+  return {
+    key,
+    label: rule.label,
+    earned,
+    max: rule.points,
+    hits: [...new Set([...hits, ...scenarioHits])].slice(0, 4),
+    status: earned >= rule.points * 0.75 ? 'good' : earned > 0 ? 'partial' : 'missed'
+  };
+}
+
 export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard') {
   const scenario = getScenarioById(scenarioId);
   const normalized = text.toLowerCase();
   const rudeTone = hasRudeTone(text);
-  const detected = [];
-  const details = rubric.map((item) => {
-    const hits = item.patterns.filter((pattern) => normalized.includes(pattern));
-    const earned = hits.length ? item.points : 0;
-    if (earned) detected.push(item.key);
-    return {
-      key: item.key,
-      label: item.label,
-      earned,
-      max: item.points,
-      hits
-    };
-  });
-
-  const lengthBonus = normalized.length > 180 ? 8 : normalized.length > 80 ? 4 : 0;
-  const dangerousPromisePenalty = ['гарантирую', 'точно понравится', 'без проблем', 'идеально'].some((phrase) => normalized.includes(phrase)) ? 12 : 0;
-  const score = rudeTone ? 0 : Math.max(0, Math.min(100, details.reduce((sum, item) => sum + item.earned, 0) + lengthBonus - dangerousPromisePenalty));
-
-  const verdict = rudeTone ? 'Клиент почти потерян: грубость/мат' : score >= 78 ? 'Готово к реальному клиенту' : score >= 52 ? 'Нормально, но нужен дожим' : 'Высокий риск слить заявку';
-
-  const missed = details.filter((item) => item.earned === 0).map((item) => item.label);
+  const details = Object.keys(conceptRules).map((key) => scoreRule(normalized, key, scenario));
+  const detected = details.filter((item) => item.status === 'good').map((item) => item.key);
+  const dangerousPromisePenalty = dangerousPromisePatterns.some((phrase) => normalized.includes(phrase)) ? (scenario.id === 'uae-premium-anxious' ? 22 : 16) : 0;
+  const stuffingPenalty = isKeywordStuffing(normalized) ? 45 : 0;
+  const noConcreteNextStepPenalty = !detected.includes('nextStep') ? 8 : 0;
+  const score = rudeTone ? 0 : Math.max(0, Math.min(100, details.reduce((sum, item) => sum + item.earned, 0) - dangerousPromisePenalty - stuffingPenalty - noConcreteNextStepPenalty));
+  const verdict = rudeTone
+    ? 'Клиент почти потерян: грубость/мат'
+    : stuffingPenalty
+      ? 'Высокий риск слить заявку: слова есть, мышления нет'
+      : score >= 78 ? 'Готово к реальному клиенту' : score >= 52 ? 'Нормально, но нужен дожим' : 'Высокий риск слить заявку';
+  const missed = details.filter((item) => item.status !== 'good').map((item) => item.label);
 
   return {
     score,
@@ -189,11 +228,14 @@ export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard')
     detected,
     details,
     missed,
-    advice: rudeTone ? ['Остановиться и извиниться. Реальный клиент после такого почти точно уйдёт.', 'Вернуться к спокойному тону: “Извините, давайте по делу. Я проверю источники и риски”.'] : buildAdvice(detected, dangerousPromisePenalty, scenario)
+    advice: rudeTone
+      ? ['Остановиться и извиниться. Реальный клиент после такого почти точно уйдёт.', 'Вернуться к спокойному тону: “Извините, давайте по делу. Я проверю источники и риски”.']
+      : buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario)
   };
 }
 
-function buildAdvice(detected, dangerousPromisePenalty, scenario) {
+function buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario) {
+  if (stuffingPenalty) return ['Не набивай ответ словами. Напиши связку: что понял → где компромисс → что проверишь → когда вернёшься.'];
   const advice = [];
   if (!detected.includes('needs')) {
     if (scenario.clientProfile.children.length) {
@@ -208,7 +250,7 @@ function buildAdvice(detected, dangerousPromisePenalty, scenario) {
   if (!detected.includes('alternatives')) advice.push('Дай вилку из 2–3 вариантов: “в бюджет”, “комфортнее”, “безопаснее”.');
   if (!detected.includes('nextStep')) advice.push('Закрывай на конкретный следующий шаг: созвон, подборку, бронь, фиксацию цены.');
   if (dangerousPromisePenalty) advice.push('Не давай гарантий в стиле “точно понравится” — лучше “проверю по источникам и предупрежу о рисках”.');
-  return advice.length ? advice : ['Хороший ответ: есть уточнения, честность, ценность и следующий шаг. Теперь можно сильнее закрывать на бронь.'];
+  return advice.length ? advice.slice(0, 4) : ['Хороший ответ: есть уточнения, честность, ценность и следующий шаг. Теперь можно сильнее закрывать на бронь.'];
 }
 
 const scenarioResponseDecks = {
