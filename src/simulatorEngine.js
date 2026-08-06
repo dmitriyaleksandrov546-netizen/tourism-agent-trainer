@@ -214,30 +214,30 @@ function buildAdvice(detected, dangerousPromisePenalty, scenario) {
 const scenarioResponseDecks = {
   'turkey-family-hard': {
     weak: [
-      'Вы сейчас общими словами отвечаете. А мне важно понять: в наш бюджет это реально или нет? И плохие отзывы вы проверяли?',
-      'Что именно вы проверили по детям? Младшему 2 года: мне важны заход в море, еда, сон и чтобы старшему 11 лет не было скучно.',
-      'Я не хочу “примерно подойдёт”. Назовите 2 варианта: что в бюджет, где риск, и за что придётся доплатить.'
+      'Пока не поняла, что именно вы будете подбирать. Мне важно сразу понять: в бюджет 180 тысяч это реально или мы ищем компромисс? И отзывы вы проверяли?',
+      'Окей, а по детям вы учтёте разницу? Младшему 2 года важен заход в море и еда, старшему 11 — чтобы не было скучно.',
+      'Тогда покажите честно: что проходит в бюджет, где риск, и за что нужно доплатить. Без “примерно нормально”.'
     ],
-    budget: 'Хорошо, но вы не сказали по бюджету. Я не хочу потом получить вариант на 250 тысяч вместо 180.',
-    children: 'А детям там точно будет нормально? Младшему 2 года, старшему 11 — это вообще разные потребности.',
-    risk: 'А какие минусы у этих вариантов? Мне не нужен рекламный текст, я хочу знать, где может быть подвох.',
-    value: 'Допустим. А почему мне бронировать через вас, если я могу сам посмотреть на агрегаторе?',
-    close: 'Ок, звучит уверенно. Пришлите 2–3 варианта с плюсами, минусами и что лучше именно для нашей семьи.'
+    budget: 'Хорошо. Только не хочется потом увидеть подборку на 250 тысяч. Скажите честно: в 180 реально или надо менять требования?',
+    children: 'А детям там точно будет нормально? Младшему 2 года и старшему 11 нужны вообще разные вещи.',
+    risk: 'А минусы какие? Я не хочу рекламный текст — лучше сразу знать, где может быть подвох по пляжу, питанию или отзывам.',
+    value: 'Допустим. А почему лучше через вас, а не самой открыть агрегатор и выбрать по отзывам?',
+    close: 'Ок, звучит понятнее. Пришлите 2–3 варианта: что в бюджет, что комфортнее и какие минусы у каждого.'
   },
   'egypt-budget-objections': {
     weak: [
-      'Вы сейчас не сравнили по делу. Если у другого дешевле на 15 тысяч, что именно там хуже: отель, номер, перелёт, страховка или условия оплаты?',
-      'Вы говорите, что проверяли — что именно? Название отеля, тип номера, риф, пляж, ветер зимой и финальную цену с доплатами?',
-      'Мне нужен простой вывод: почему у вас дороже и стоит ли оно этих денег. Иначе я уйду туда, где дешевле.'
+      'Я пока не поняла разницу. Если у другого дешевле на 15 тысяч, что именно там может быть хуже?',
+      'Вы говорите “проверю”, но что именно: отель, номер, рейс, багаж, риф, пляж и финальную цену?',
+      'Мне нужен простой вывод: почему у вас дороже и стоит ли оно этих денег. Иначе логично выбрать дешевле.'
     ],
     budget: 'Вы всё ещё не разобрали цену. Покажите, где разница: даты, рейс, номер, страховка, багаж, трансфер.',
     risk: 'А минусы дешёвого варианта какие? Мне важно не купить “5 звёзд”, а потом получить понтон, ветер и слабое питание.',
-    value: 'Почему мне платить вам дороже? Что вы сделаете такого, чего не сделает агрегатор?',
+    value: 'Почему мне платить вам дороже? Что вы проверите такого, чего я не увижу на агрегаторе?',
     close: 'Ладно, пришлите сравнение в 3 строки: дешевле, безопаснее, оптимально по цене/качеству.'
   },
   'uae-premium-anxious': {
     weak: [
-      'Слишком общо. Я спрашивала конкретно: стройка рядом, депозит, пляж через дорогу, трансфер и что можно проверить до оплаты.',
+      'Пока слишком общо. Мне важны конкретно стройка рядом, депозит, пляж через дорогу и что можно проверить до оплаты.',
       'Что именно вы проверите по источникам? Мне нужны даты актуальности, не “обычно всё хорошо”.',
       'Если вы не можете сказать, где риски, я не готова платить такой чек. Дайте прозрачную проверку по каждому отелю.'
     ],
@@ -248,42 +248,56 @@ const scenarioResponseDecks = {
   }
 };
 
+const dialogueConcepts = {
+  budget: ['бюджет', 'цен', 'дороже', 'дешевле', 'вилк', 'компромисс', '180', '200', '250', 'стоим'],
+  children: ['дет', 'младш', 'старш', 'возраст', '2 года', '11 лет', 'семь'],
+  risk: ['риск', 'минус', 'подвох', 'отзыв', 'провер', 'не обещ', 'чест', 'источник'],
+  value: ['сопровожд', 'через вас', 'агрегатор', 'проверю', 'сверю', 'актуальн', 'оператор', 'источник'],
+  alternatives: ['вариант', 'альтернатив', '2', '3', 'вилка', 'подборк'],
+  nextStep: ['сегодня', 'вечером', 'завтра', 'до 17', 'до 18', 'пришлю', 'отправлю', 'созвон', 'whatsapp', 'вотсап']
+};
+
+function textHasConcept(text = '', key) {
+  const normalized = text.toLowerCase();
+  return dialogueConcepts[key].some((word) => normalized.includes(word));
+}
+
+function collectDialogueState(agentText = '', history = []) {
+  const agentTexts = [
+    ...history.filter((message) => message.role === 'agent').map((message) => message.text),
+    agentText
+  ].join('\n').toLowerCase();
+
+  return Object.fromEntries(Object.keys(dialogueConcepts).map((key) => [key, textHasConcept(agentTexts, key)]));
+}
+
 function pickFreshReply(candidates, history = []) {
   const usedClientTexts = new Set(history.filter((message) => message.role === 'client').map((message) => message.text));
   return candidates.find((candidate) => !usedClientTexts.has(candidate)) || candidates[candidates.length - 1];
 }
 
+function pickByDialogueGap(scenario, deck, state, history) {
+  const candidates = [];
+  if (!state.budget) candidates.push(deck.budget);
+  if (scenario.clientProfile.children.length && !state.children) candidates.push(deck.children);
+  if (!state.risk) candidates.push(deck.risk);
+  if (!state.value) candidates.push(deck.value);
+  if (state.budget && state.risk && state.alternatives && state.nextStep) candidates.push(deck.close);
+  candidates.push(...deck.weak);
+  return pickFreshReply(candidates.filter(Boolean), history);
+}
+
 export function getNextClientReply(scenarioId, agentText = '', turn = 1, history = []) {
   const scenario = getScenarioById(scenarioId);
   const deck = scenarioResponseDecks[scenario.id] || scenarioResponseDecks['turkey-family-hard'];
-  const evalResult = evaluateAgentReply(agentText);
-  const lower = agentText.toLowerCase();
+  const evalResult = evaluateAgentReply(agentText, scenario.id);
+  const state = collectDialogueState(agentText, history);
 
   if (evalResult.score < 40) {
     return pickFreshReply(deck.weak.slice(Math.max(0, turn - 2)), history);
   }
 
-  if (!lower.includes('бюджет') && !lower.includes('цен') && !lower.includes('дороже') && !lower.includes('дешевле')) {
-    return deck.budget || deck.weak[0];
-  }
-
-  if (!lower.includes('дет') && scenario.clientProfile.children.length) {
-    return deck.children || deck.weak[1];
-  }
-
-  if (!evalResult.detected.includes('risk')) {
-    return deck.risk;
-  }
-
-  if (!evalResult.detected.includes('value')) {
-    return deck.value;
-  }
-
-  if (turn >= 3 || evalResult.score >= 78) {
-    return deck.close;
-  }
-
-  return deck.value;
+  return pickByDialogueGap(scenario, deck, state, history);
 }
 
 export function createInitialMessages(scenarioId) {

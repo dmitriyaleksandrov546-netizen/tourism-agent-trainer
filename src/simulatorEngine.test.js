@@ -45,6 +45,19 @@ describe('simulatorEngine', () => {
     expect(uaeReply).toContain('стройк');
   });
 
+  it('keeps dialogue state from previous agent turns instead of repeating the same budget pushback', () => {
+    const firstReply = getNextClientReply('turkey-family-hard', 'Сейчас посмотрю, что реально проходит в бюджет 180, и не буду обещать лишнего.', 1, []);
+    const history = [
+      { role: 'client', text: firstReply },
+      { role: 'agent', text: 'Сейчас посмотрю, что реально проходит в бюджет 180, и не буду обещать лишнего.' }
+    ];
+    const secondReply = getNextClientReply('turkey-family-hard', 'Проверю отзывы и риски, пришлю варианты сегодня вечером.', 2, history);
+
+    expect(secondReply).not.toEqual(firstReply);
+    expect(secondReply).toMatch(/дет|агрегатор|вариант/i);
+    expect(secondReply).not.toContain('в бюджет 180 тысяч это реально');
+  });
+
   it('does not give family-with-children advice in a premium UAE scenario without children', () => {
     const result = evaluateAgentReply('Красивый отель, точно без проблем.', 'uae-premium-anxious');
 
