@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from './src/llmClient.js';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, isPoliteProcessReply, normalizeClientReply } from './src/neuroclientPrompt.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,9 +32,7 @@ app.use(express.json({ limit: '512kb' }));
 app.get('/api/neuroclient/health', (_req, res) => {
   res.json({
     ok: true,
-    openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
-    model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-    mode: process.env.OPENAI_API_KEY ? 'openai' : 'local-fallback'
+    ...getPublicLlmStatus()
   });
 });
 
@@ -72,17 +71,18 @@ app.post('/api/neuroclient', async (req, res) => {
     return res.json(createFallbackReply(scenarioId, agentText, turn, history));
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  const llmConfig = getLlmConfig();
+  if (!llmConfig.configured) {
     return res.json(createFallbackReply(scenarioId, agentText, turn, history));
   }
 
   try {
     const prompt = buildNeuroclientPrompt({ scenarioId, agentText, turn, history });
-    const text = await callOpenAI(prompt);
-    return res.json({ text: normalizeClientReply(text), source: 'openai' });
+    const text = await callConfiguredLlm(prompt);
+    return res.json({ text: normalizeClientReply(text), source: llmConfig.provider });
   } catch (error) {
     console.error('[neuroclient-api]', error?.message || error);
-    return res.json({ ...createFallbackReply(scenarioId, agentText, turn, history), source: 'fallback-after-ai-error' });
+    return res.json({ ...createFallbackReply(scenarioId, agentText, turn, history), source: 'fallback-after-llm-error' });
   }
 });
 
@@ -132,46 +132,4 @@ function saveWazzupWebhook(event) {
   }
 
   return { messages: messages.length, statuses: statuses.length };
-}
-
-async function callOpenAI(prompt) {
-  const models = [process.env.OPENAI_MODEL || 'gpt-4.1-mini', 'gpt-4o-mini'];
-  let lastError;
-
-  for (const model of [...new Set(models)]) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25000);
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.88,
-          max_tokens: 260,
-          messages: [
-            { role: 'system', content: prompt.system },
-            { role: 'user', content: prompt.user }
-          ]
-        })
-      });
-      clearTimeout(timeout);
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        lastError = new Error(data?.error?.message || `OpenAI HTTP ${response.status}`);
-        continue;
-      }
-
-      return data.choices?.[0]?.message?.content || '';
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error('OpenAI call failed');
 }
