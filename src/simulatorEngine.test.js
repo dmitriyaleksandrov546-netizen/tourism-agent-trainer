@@ -57,4 +57,16 @@ describe('simulatorEngine', () => {
     expect(reply).toContain('общими словами');
     expect(reply).toContain('бюджет');
   });
+
+  it('waits when agent promised to send a selection by a concrete deadline', () => {
+    const reply = getNextClientReply(
+      'turkey-family-hard',
+      'Понимаю: младшему нужен безопасный пляж, старшему активности. Сегодня до 18:00 пришлю 3 варианта с плюсами, минусами и отзывами.',
+      1
+    );
+
+    expect(reply).toContain('жду');
+    expect(reply).not.toContain('А какие минусы');
+    expect(reply).not.toContain('общими словами');
+  });
 });
