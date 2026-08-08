@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { corpusInsights, createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import './styles.css';
 
@@ -12,19 +12,17 @@ function App() {
   const [isSending, setIsSending] = useState(false);
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
-  const clientMessage = messages.find((message) => message.role === 'client')?.text || activeScenario.startMessage;
-  const lastClientReply = messages.filter((message) => message.role === 'client').at(-1)?.text;
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
-    setMessages(createInitialMessages(id));
+    setMessages(createInitialMessages(id, Date.now()));
     setDraft('');
     setLastEvaluation(null);
     setIsSending(false);
   };
 
   const resetAttempt = () => {
-    setMessages(createInitialMessages(activeScenarioId));
+    setMessages(createInitialMessages(activeScenarioId, Date.now()));
     setDraft('');
     setLastEvaluation(null);
     setIsSending(false);
@@ -57,6 +55,20 @@ function App() {
     setIsSending(false);
   };
 
+  useEffect(() => {
+    const handleGlobalEnter = (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'textarea' || tag === 'input' || tag === 'button' || document.activeElement?.isContentEditable) return;
+      if (!draft.trim() || isSending) return;
+      event.preventDefault();
+      sendReply();
+    };
+
+    window.addEventListener('keydown', handleGlobalEnter);
+    return () => window.removeEventListener('keydown', handleGlobalEnter);
+  }, [draft, isSending, activeScenarioId, messages]);
+
   return (
     <main className="app">
       <header className="top">
@@ -69,16 +81,24 @@ function App() {
 
       <section className="layout">
         <section className="card situations">
-          <h2>1. Выберите ситуацию</h2>
+          <nav className="sideMenu" aria-label="Меню платформы">
+            <button className="active" type="button">Тренажёр</button>
+            <button type="button" disabled>База отелей</button>
+            <button type="button" disabled>Тесты</button>
+            <button type="button" disabled>Стажёры</button>
+            <button type="button" disabled>Настройки</button>
+          </nav>
+
+          <h2>Ситуации</h2>
           <div className="situationList">
-            {scenarios.map((scenario) => (
+            {scenarios.map((scenario, index) => (
               <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                <small>Уровень {index + 1} · {scenario.level}</small>
                 <b>{scenario.shortTitle}</b>
                 <span>{scenario.shortSubtitle}</span>
               </button>
             ))}
           </div>
-          <CorpusPanel />
         </section>
 
         <section className="card trainer">
@@ -87,60 +107,37 @@ function App() {
             <button className="ghost" onClick={resetAttempt}>Очистить</button>
           </div>
 
-          <p className="label">Клиент пишет:</p>
-          <article className="clientText">{clientMessage}</article>
+          <div className="dialogWindow" aria-label="Диалог с клиентом">
+            {messages.map((message) => (
+              <article key={message.id} className={`dialogMessage ${message.role}`}>
+                <span>{message.role === 'client' ? 'Клиент' : 'Вы'}</span>
+                <p>{message.text}</p>
+                <small>{message.time}</small>
+              </article>
+            ))}
+          </div>
 
           <label className="answerBox">
             <span>Напишите ответ как в WhatsApp.</span>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Например: понимаю задачу, уточню детали, честно скажу про риски и предложу следующий шаг."
+              placeholder="Напишите как клиенту в WhatsApp. Enter — отправить, Shift+Enter — новая строка."
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') sendReply();
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  sendReply();
+                }
               }}
             />
           </label>
 
           <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
 
-          {lastEvaluation && <ClientPushback text={lastClientReply} />}
           {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
         </section>
       </section>
     </main>
-  );
-}
-
-function CorpusPanel() {
-  const coverage = corpusInsights.sourceCoverage || {};
-  const topTriggers = corpusInsights.silenceTriggers?.slice(0, 2) || [];
-
-  return (
-    <section className="corpusPanel" aria-label="Источник методики">
-      <p className="corpusTitle">Методика основана на корпусе</p>
-      <div className="corpusStats">
-        <span><b>{corpusInsights.totalCalls}</b> звонков</span>
-        <span><b>{coverage.wazzupDealFiles || corpusInsights.wazzupDialogs}</b> Wazzup</span>
-        <span><b>{coverage.trainingMaterials || corpusInsights.trainingMaterials.total}</b> материалов</span>
-      </div>
-      <p className="corpusNote">Средний балл реальных звонков: {corpusInsights.averageScore}/100. Тренажёр проверяет не “красивые слова”, а действия, которые снижают риск потери клиента.</p>
-      <div className="corpusTriggers">
-        {topTriggers.map((trigger) => (
-          <p key={trigger.label}>⚠ {trigger.label} — {trigger.share}%</p>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ClientPushback({ text }) {
-  if (!text) return null;
-  return (
-    <section className="clientPushback">
-      <p className="label">Клиент после вашего ответа:</p>
-      <article>{text}</article>
-    </section>
   );
 }
 

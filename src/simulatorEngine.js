@@ -4,18 +4,45 @@ export { corpusInsights };
 
 export const scenarios = [
   {
+    id: 'turkey-family-warmup',
+    shortTitle: 'Турция: входящий лид',
+    shortSubtitle: 'Клиент начинает издалека и пока не дал вводные',
+    archetype: 'family_age_constraints',
+    title: 'Турция: клиент только начинает разговор',
+    level: 'Лёгкий старт',
+    direction: 'Турция / первичный контакт',
+    clientProfile: {
+      name: 'Анна', family: 'семья с детьми', children: ['2 года', '11 лет'], budget: 'до 180 000 ₽',
+      hiddenNeed: 'понять, можно ли вообще уложиться без плохого пляжа и скуки для старшего', trigger: 'боится, что агент сразу начнёт продавать без вопросов'
+    },
+    startMessages: [
+      'Здравствуйте. Вы туры подбираете?',
+      'Добрый день. Можно у вас по Турции спросить?',
+      'Здравствуйте, хотим летом отдохнуть семьёй, но пока не понимаю, с чего начать.'
+    ],
+    startMessage: 'Здравствуйте. Вы туры подбираете?',
+    requiredConcepts: ['kidsAges', 'budgetFork', 'riskHonesty', 'nextStep'],
+    hiddenPainConcepts: ['kidsAges', 'safetyForKids', 'reviewsFear'],
+    sourceRefs: sourceRefs.familyTurkey
+  },
+  {
     id: 'turkey-family-hard',
     shortTitle: 'Семья в Турцию',
     shortSubtitle: 'Бюджет ограничен, требования высокие',
     archetype: 'family_age_constraints',
     title: 'Семья 2+2: Турция, бюджет жмёт',
-    level: 'Жёсткий клиент',
+    level: 'Базовый',
     direction: 'Турция / семейный отдых',
     clientProfile: {
       name: 'Анна', family: '2 взрослых + 2 ребёнка', children: ['2 года', '11 лет'], budget: 'до 180 000 ₽',
       hiddenNeed: 'безопасный заход в море для младшего и активности для старшего', trigger: 'боится плохих отзывов и переплат'
     },
-    startMessage: 'Здравствуйте. Нас четверо: двое взрослых, детям 2 года и 11 лет. Хотим Турцию, 5*, первая линия, песок, аквапарк, хорошее питание и чтобы не было толпы. Бюджет до 180 тысяч. Такое реально?',
+    startMessages: [
+      'Нас четверо, хотим Турцию летом. Реально подобрать что-то нормальное, не за космос?',
+      'Смотрим Турцию с детьми, но я уже запуталась в отелях и отзывах.',
+      'Хотим семейный отдых в Турции. Боюсь ошибиться с пляжем и питанием.'
+    ],
+    startMessage: 'Нас четверо, хотим Турцию летом. Реально подобрать что-то нормальное, не за космос?',
     requiredConcepts: ['kidsAges', 'budgetFork', 'riskHonesty', 'alternatives', 'nextStep'],
     hiddenPainConcepts: ['kidsAges', 'safetyForKids', 'reviewsFear'],
     sourceRefs: sourceRefs.familyTurkey
@@ -23,36 +50,90 @@ export const scenarios = [
   {
     id: 'egypt-budget-objections',
     shortTitle: 'Египет дешевле у конкурента',
-    shortSubtitle: 'Клиент сравнивает цену',
+    shortSubtitle: 'Клиент сравнивает цену и не верит агенту',
     archetype: 'price_sensitive',
     title: 'Египет: “дёшево, но как премиум”',
-    level: 'Возражения по цене',
-    direction: 'Египет / бюджет',
+    level: 'Средний',
+    direction: 'Египет / цена и ценность агента',
     clientProfile: {
       name: 'Игорь', family: 'пара', children: [], budget: 'до 120 000 ₽',
       hiddenNeed: 'хочет тёплое море и нормальный риф, но не понимает компромиссы', trigger: 'нашёл дешевле у конкурента'
     },
-    startMessage: 'Мне у другого агента дали Египет дешевле на 15 тысяч. Почему у вас дороже? Там тоже 5 звёзд и всё включено.',
+    startMessages: [
+      'Мне уже дали Египет дешевле. Почему у вас может быть дороже?',
+      'Хочу Египет, но не понимаю, почему цены так отличаются у разных агентств.',
+      'Можно Египет недорого, но чтобы без подвохов? У конкурента цена ниже.'
+    ],
+    startMessage: 'Мне уже дали Египет дешевле. Почему у вас может быть дороже?',
     requiredConcepts: ['compareOffer', 'budgetFork', 'riskHonesty', 'agentValue', 'nextStep'],
     hiddenPainConcepts: ['reefBeach', 'competitorPrice', 'reviewsFear'],
     sourceRefs: sourceRefs.egyptPrice
   },
   {
+    id: 'thailand-thinking-silence',
+    shortTitle: 'Таиланд: “я подумаю”',
+    shortSubtitle: 'Клиент тянет решение и может пропасть',
+    archetype: 'thinking_budget_unclear',
+    title: 'Таиланд: клиент уходит в “подумаю”',
+    level: 'Средний+',
+    direction: 'Таиланд / удержание лида',
+    clientProfile: {
+      name: 'Ольга', family: 'пара', children: [], budget: 'до 230 000 ₽',
+      hiddenNeed: 'боится переплатить и хочет время сравнить самой', trigger: 'не любит давление и уходит, если нет понятного следующего шага'
+    },
+    startMessages: [
+      'Здравствуйте. Мы думаем про Таиланд, но пока просто смотрим варианты.',
+      'Можно узнать по Таиланду? Мы пока не уверены, хотим ли бронировать.',
+      'Смотрю Пхукет, но боюсь, что сейчас всё дорого и лучше подождать.'
+    ],
+    startMessage: 'Здравствуйте. Мы думаем про Таиланд, но пока просто смотрим варианты.',
+    requiredConcepts: ['budgetFork', 'riskHonesty', 'agentValue', 'nextStep'],
+    hiddenPainConcepts: ['competitorPrice', 'reviewsFear'],
+    sourceRefs: sourceRefs.egyptPrice
+  },
+  {
     id: 'uae-premium-anxious',
     shortTitle: 'ОАЭ без сюрпризов',
-    shortSubtitle: 'Клиент боится ошибок',
+    shortSubtitle: 'Премиум-клиент боится ошибок',
     archetype: 'thinking_budget_unclear',
     title: 'ОАЭ: премиум-клиент без права на ошибку',
-    level: 'Премиум',
+    level: 'Сложный',
     direction: 'ОАЭ / высокий чек',
     clientProfile: {
       name: 'Марина', family: '2 взрослых', children: [], budget: 'до 650 000 ₽',
       hiddenNeed: 'хочет уверенность, быстрые ответы и отсутствие сюрпризов', trigger: 'не терпит общих фраз'
     },
-    startMessage: 'Мне нужен отель в Дубае, чтобы без сюрпризов. Я не хочу потом выяснять, что стройка рядом, пляж через дорогу или депозит огромный. Что вы можете гарантировать?',
+    startMessages: [
+      'Добрый день. Нужен хороший отель в Дубае, но я очень не хочу неприятных сюрпризов.',
+      'Здравствуйте. Сможете подобрать ОАЭ так, чтобы всё было проверено до оплаты?',
+      'Мне нужен Дубай без стройки рядом, скрытых депозитов и пляжа “через дорогу”. Вы такое проверяете?'
+    ],
+    startMessage: 'Добрый день. Нужен хороший отель в Дубае, но я очень не хочу неприятных сюрпризов.',
     requiredConcepts: ['riskHonesty', 'sourceCheck', 'factSignalConclusion', 'nextStep'],
     hiddenPainConcepts: ['surpriseControl', 'depositConstruction', 'noFalseGuarantee'],
     sourceRefs: sourceRefs.uaePremium
+  },
+  {
+    id: 'last-minute-angry',
+    shortTitle: 'Срочный тур и раздражение',
+    shortSubtitle: 'Клиент торопится, нервничает и легко срывается',
+    archetype: 'silent_busy_unreachable',
+    title: 'Срочный вылет: клиент на нервах',
+    level: 'Экзамен',
+    direction: 'Горящий запрос / кризисная коммуникация',
+    clientProfile: {
+      name: 'Дмитрий', family: '2 взрослых', children: [], budget: 'до 200 000 ₽',
+      hiddenNeed: 'хочет быстрое решение, но боится купить плохой отель из-за спешки', trigger: 'раздражается от медленных и общих ответов'
+    },
+    startMessages: [
+      'Нужен тур с вылетом на этой неделе. Только без долгих вопросов, можете быстро?',
+      'Здравствуйте. Срочно нужен нормальный вариант, у меня уже нет времени разбираться.',
+      'Мне надо улететь в ближайшие дни. Если можете помочь быстро — пишите.'
+    ],
+    startMessage: 'Нужен тур с вылетом на этой неделе. Только без долгих вопросов, можете быстро?',
+    requiredConcepts: ['budgetFork', 'riskHonesty', 'alternatives', 'nextStep'],
+    hiddenPainConcepts: ['reviewsFear', 'competitorPrice'],
+    sourceRefs: sourceRefs.familyTurkey
   }
 ];
 
@@ -219,7 +300,9 @@ export function getNextClientReply(scenarioId, agentText = '', turn = 1) {
   return 'Допустим. А почему мне бронировать через вас, если я могу сам посмотреть на агрегаторе?';
 }
 
-export function createInitialMessages(scenarioId) {
+export function createInitialMessages(scenarioId, variantIndex = 0) {
   const scenario = getScenarioById(scenarioId);
-  return [{ id: 'client-start', role: 'client', text: scenario.startMessage, time: 'сейчас' }];
+  const starts = scenario.startMessages?.length ? scenario.startMessages : [scenario.startMessage];
+  const text = starts[Math.abs(variantIndex) % starts.length];
+  return [{ id: 'client-start', role: 'client', text, time: 'сейчас' }];
 }
