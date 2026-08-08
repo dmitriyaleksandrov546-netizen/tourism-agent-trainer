@@ -21,7 +21,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--soft); 
 button, textarea { font: inherit; }
 button { cursor: pointer; }
 
-.app { width: min(1120px, 100%); margin: 0 auto; padding: 22px; }
+.app { width: min(1360px, 100%); margin: 0 auto; padding: 22px; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
 .kicker { margin: 0 0 4px; color: var(--green-dark); font-size: 14px; font-weight: 900; }
 h1, h2, h3, p { margin-top: 0; }
@@ -29,38 +29,42 @@ h1 { margin-bottom: 0; font-size: clamp(25px, 4vw, 42px); line-height: 1.02; let
 h2 { margin-bottom: 14px; font-size: 20px; letter-spacing: -.02em; }
 h3 { margin: 0 0 12px; font-size: 18px; }
 
-.layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: 0 12px 34px rgba(23, 44, 36, .06); }
+.situations { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; }
+
+.sideMenu { display: grid; gap: 8px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.sideMenu button { width: 100%; text-align: left; border: 1px solid transparent; border-radius: 14px; padding: 10px 12px; background: transparent; color: var(--muted); font-weight: 850; }
+.sideMenu button.active { background: #e6f7ef; border-color: rgba(11,132,99,.24); color: var(--green-dark); }
+.sideMenu button:disabled { opacity: .45; cursor: not-allowed; }
+
 .situationList { display: grid; gap: 10px; }
 .situationList button { width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 14px; color: var(--ink); }
 .situationList button.active { border-color: var(--green); background: #e6f7ef; box-shadow: inset 0 0 0 1px rgba(11,132,99,.16); }
+.situationList small { display: block; margin-bottom: 7px; color: var(--green-dark); font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
 .situationList b { display: block; margin-bottom: 4px; font-size: 16px; }
 .situationList span { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
-.corpusPanel { margin-top: 14px; padding: 14px; border-radius: 16px; background: #f8faf8; border: 1px solid var(--line); }
-.corpusTitle { margin: 0 0 10px; font-size: 13px; color: var(--green-dark); font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
-.corpusStats { display: grid; gap: 8px; }
-.corpusStats span { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 12px; background: #fff; color: var(--muted); font-size: 13px; }
-.corpusStats b { color: var(--ink); font-size: 15px; }
-.corpusNote { margin: 12px 0 0; color: #33443d; font-size: 13px; line-height: 1.38; }
-.corpusTriggers { display: grid; gap: 6px; margin-top: 10px; }
-.corpusTriggers p { margin: 0; color: #6b491b; font-size: 12px; line-height: 1.35; }
 
-.trainer { padding: 0; overflow: hidden; }
+.trainer { padding: 0; overflow: hidden; min-height: calc(100vh - 44px); }
 .sectionHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 0; }
 .sectionHead h2 { margin-bottom: 0; }
 .ghost, .linkButton { border: 0; background: transparent; color: var(--green-dark); font-weight: 800; padding: 8px 0; }
-.label { margin: 18px 18px 8px; color: var(--muted); font-size: 14px; font-weight: 800; }
-.clientText { margin: 0 18px; padding: 18px; border-radius: 18px; background: #f8faf8; border: 1px solid var(--line); font-size: 18px; line-height: 1.48; }
+
+.dialogWindow { margin: 18px; padding: 18px; min-height: 360px; max-height: 52vh; overflow: auto; border-radius: 22px; background: #f8faf8; border: 1px solid var(--line); display: grid; align-content: start; gap: 12px; }
+.dialogMessage { width: min(76%, 760px); padding: 13px 15px; border-radius: 18px; box-shadow: 0 8px 22px rgba(23, 44, 36, .06); }
+.dialogMessage.client { justify-self: start; background: #fff; border-top-left-radius: 6px; }
+.dialogMessage.agent { justify-self: end; background: var(--green); color: white; border-top-right-radius: 6px; }
+.dialogMessage span { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: .06em; opacity: .68; }
+.dialogMessage p { margin: 0; line-height: 1.45; white-space: pre-wrap; }
+.dialogMessage small { display: block; margin-top: 8px; opacity: .62; }
+
 .answerBox { display: grid; gap: 8px; margin: 18px; }
 .answerBox span { color: var(--ink); font-weight: 850; }
-textarea { width: 100%; min-height: 150px; resize: vertical; border: 1px solid var(--line); border-radius: 18px; padding: 15px; outline: none; color: var(--ink); background: #fff; line-height: 1.45; }
+textarea { width: 100%; min-height: 128px; resize: vertical; border: 1px solid var(--line); border-radius: 18px; padding: 15px; outline: none; color: var(--ink); background: #fff; line-height: 1.45; }
 textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,99,.1); }
 .primary { margin: 0 18px 18px; min-height: 52px; width: calc(100% - 36px); border: 0; border-radius: 16px; background: var(--green); color: white; font-size: 17px; font-weight: 950; }
 .primary:hover { background: var(--green-dark); }
-
-.clientPushback { margin: 0 18px 18px; }
-.clientPushback .label { margin: 0 0 8px; }
-.clientPushback article { padding: 14px 16px; border-radius: 16px; background: #fff7e8; border: 1px solid #f0d7ad; line-height: 1.42; color: #55360f; }
+.primary:disabled { opacity: .68; cursor: wait; }
 
 .review { margin: 0 18px 18px; padding: 18px; border-radius: 20px; border: 1px solid var(--line); background: #fff; }
 .review.good { border-color: rgba(11,132,99,.32); background: #f2fbf6; }
@@ -80,10 +84,14 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
   h1 { font-size: 24px; }
   .layout { grid-template-columns: 1fr; gap: 12px; }
   .card { border-radius: 18px; padding: 14px; }
-  .trainer { padding: 0; }
+  .situations { position: static; max-height: none; }
+  .sideMenu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sideMenu button { text-align: center; }
+  .trainer { padding: 0; min-height: auto; }
   .situations h2, .sectionHead h2 { font-size: 18px; }
   .situationList { display: flex; overflow-x: auto; padding-bottom: 2px; scroll-snap-type: x mandatory; }
-  .situationList button { min-width: 230px; scroll-snap-align: start; }
-  .clientText { font-size: 16px; }
-  textarea { min-height: 130px; }
+  .situationList button { min-width: 240px; scroll-snap-align: start; }
+  .dialogWindow { min-height: 280px; max-height: 48vh; margin: 14px; }
+  .dialogMessage { width: 92%; }
+  textarea { min-height: 120px; }
 }
