@@ -1,5 +1,6 @@
 import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from '../src/llmClient.js';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from '../src/neuroclientPrompt.js';
+import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs } from '../src/dialogLogStore.server.js';
 
 function sendJson(res, status, payload, extraHeaders = {}) {
   res.statusCode = status;
@@ -18,7 +19,7 @@ function corsHeaders(req) {
   const origin = req.headers.origin;
   const headers = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
   };
   if (origin && (allowedOrigins.includes('*') || allowedOrigins.includes(origin))) {
     headers['Access-Control-Allow-Origin'] = origin;
@@ -48,7 +49,43 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET' && path.endsWith('/api/neuroclient/health')) {
-    return sendJson(res, 200, { ok: true, ...getPublicLlmStatus() }, headers);
+    return sendJson(res, 200, { ok: true, ...getPublicLlmStatus(), dialogLogs: getDialogLogStoreStatus() }, headers);
+  }
+
+  if (path.endsWith('/api/dialog-logs')) {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, { ok: true, configured: getDialogLogStoreStatus().configured, records: await listDialogLogs() }, headers);
+      } catch (error) {
+        const notConfigured = error?.code === 'SUPABASE_NOT_CONFIGURED';
+        return sendJson(res, notConfigured ? 200 : 500, { ok: false, configured: false, records: [], error: error?.message || 'dialog log store unavailable' }, headers);
+      }
+    }
+
+    if (req.method === 'POST') {
+      let body;
+      try {
+        body = await readJsonBody(req);
+        const record = await createDialogLog(body?.record || body);
+        return sendJson(res, 200, { ok: true, configured: true, record }, headers);
+      } catch (error) {
+        const notConfigured = error?.code === 'SUPABASE_NOT_CONFIGURED';
+        return sendJson(res, notConfigured ? 200 : 500, { ok: false, configured: false, error: error?.message || 'failed to save dialog log' }, headers);
+      }
+    }
+
+    if (req.method === 'DELETE') {
+      let body;
+      try {
+        body = await readJsonBody(req);
+        if (!body?.id) return sendJson(res, 400, { ok: false, error: 'id is required' }, headers);
+        await deleteDialogLog(body.id);
+        return sendJson(res, 200, { ok: true }, headers);
+      } catch (error) {
+        const notConfigured = error?.code === 'SUPABASE_NOT_CONFIGURED';
+        return sendJson(res, notConfigured ? 200 : 500, { ok: false, configured: false, error: error?.message || 'failed to delete dialog log' }, headers);
+      }
+    }
   }
 
   if (req.method !== 'POST' || !path.endsWith('/api/neuroclient')) {
