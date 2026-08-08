@@ -48,7 +48,9 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .trainer { padding: 0; overflow: hidden; min-height: calc(100vh - 44px); }
 .sectionHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 0; }
 .sectionHead h2 { margin-bottom: 0; }
+.headActions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ghost, .linkButton { border: 0; background: transparent; color: var(--green-dark); font-weight: 800; padding: 8px 0; }
+.copyState { margin: 8px 18px 0; color: var(--green-dark); font-size: 13px; font-weight: 850; }
 
 .dialogWindow { margin: 18px; padding: 18px; min-height: 360px; max-height: 52vh; overflow: auto; border-radius: 22px; background: #f8faf8; border: 1px solid var(--line); display: grid; align-content: start; gap: 12px; }
 .dialogMessage { width: min(76%, 760px); padding: 13px 15px; border-radius: 18px; box-shadow: 0 8px 22px rgba(23, 44, 36, .06); }

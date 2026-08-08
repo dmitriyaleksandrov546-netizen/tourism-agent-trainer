@@ -167,6 +167,11 @@ function hasLogic(text) { return hasAny(text, logicLinks); }
 function evidenceFor(text, words) { return words.filter((word) => text.includes(word)).slice(0, 3); }
 function sentenceCount(text) { return text.split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean).length; }
 function hasConcreteNextStep(text) { return hasAny(text, conceptMap.nextStep.words) && (/\d/.test(text) || hasAny(text, ['сегодня', 'вечером', 'завтра', 'whatsapp', 'вотсап'])); }
+function hasPromisedSelection(text) {
+  return hasAny(text, ['пришлю', 'отправлю', 'скину', 'подготовлю', 'сравню', 'подберу', 'вариант', 'подборк'])
+    && hasAny(text, ['сегодня', 'завтра', 'до ', 'вечером', 'утром', 'через час', 'в течение'])
+    && (/\d/.test(text) || hasAny(text, ['сегодня', 'завтра', 'вечером', 'утром']));
+}
 function isKeywordStuffing(text) {
   const words = text.replace(/[.,!?;:()«»“”]/g, ' ').split(/\s+/).filter(Boolean);
   const hits = stuffingWords.filter((word) => text.includes(word)).length;
@@ -287,7 +292,12 @@ export function evaluateAgentReply(text = '', scenarioArg = scenarios[0]) {
 export function getNextClientReply(scenarioId, agentText = '', turn = 1) {
   const scenario = getScenarioById(scenarioId);
   const result = evaluateAgentReply(agentText, scenario);
+  const normalized = normalize(agentText);
   const missedKeys = result.dimensions.filter((d) => d.status !== 'good').map((d) => d.key);
+
+  if (hasPromisedSelection(normalized) && !result.penalties.some((p) => ['keywordStuffing', 'emptyAdvertising', 'dangerousPromise'].includes(p.key))) {
+    return 'Хорошо, тогда жду подборку в обещанный срок. Если что-то не проходит по бюджету или есть риск по отзывам — напишите сразу, пожалуйста.';
+  }
 
   if (result.score < 40 || result.penalties.some((p) => ['keywordStuffing', 'emptyAdvertising'].includes(p.key))) {
     return 'Вы сейчас общими словами отвечаете. А мне важно понять: в наш бюджет это реально или нет? И плохие отзывы вы проверяли?';
@@ -296,7 +306,7 @@ export function getNextClientReply(scenarioId, agentText = '', turn = 1) {
   if (missedKeys.includes('hiddenPain') && scenario.clientProfile.children.length) return 'А детям там точно будет нормально? Младшему 2 года, старшему 11 — это вообще разные потребности.';
   if (missedKeys.includes('riskHonesty')) return 'А какие минусы у этих вариантов? Мне не нужен рекламный текст, я хочу знать, где может быть подвох.';
   if (missedKeys.includes('nextStep')) return 'Допустим. А что дальше конкретно — когда вы пришлёте варианты и как мы не потеряем цену?';
-  if (turn >= 3 || result.score >= 80) return 'Ок, звучит уверенно. Пришлите 2–3 варианта с плюсами, минусами и что лучше именно для нас.';
+  if (turn >= 3 || result.score >= 80) return 'Ок, звучит уверенно. Жду 2–3 варианта с плюсами, минусами и что лучше именно для нас.';
   return 'Допустим. А почему мне бронировать через вас, если я могу сам посмотреть на агрегаторе?';
 }
 

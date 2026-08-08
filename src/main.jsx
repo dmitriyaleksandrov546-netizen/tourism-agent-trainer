@@ -10,6 +10,7 @@ function App() {
   const [draft, setDraft] = useState('');
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [isSending, setIsSending] = useState(false);
+  const [copyState, setCopyState] = useState('');
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
 
@@ -19,6 +20,7 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setIsSending(false);
+    setCopyState('');
   };
 
   const resetAttempt = () => {
@@ -26,6 +28,25 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setIsSending(false);
+    setCopyState('');
+  };
+
+  const copyDialogue = async () => {
+    const lines = [
+      `Сценарий: ${activeScenario.shortTitle} — ${activeScenario.shortSubtitle}`,
+      `Уровень: ${activeScenario.level}`,
+      '',
+      ...messages.map((message) => `${message.role === 'client' ? 'Клиент' : 'Агент'}: ${message.text}`),
+      ...(draft.trim() ? ['', `Черновик агента: ${draft.trim()}`] : []),
+      ...(lastEvaluation ? ['', `Последний балл: ${lastEvaluation.score}/100`, `Вердикт: ${lastEvaluation.verdict}`] : [])
+    ];
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyState('Скопировано');
+    } catch (_error) {
+      setCopyState('Не удалось скопировать');
+    }
   };
 
   const sendReply = async () => {
@@ -104,8 +125,12 @@ function App() {
         <section className="card trainer">
           <div className="sectionHead">
             <h2>2. Ответьте клиенту</h2>
-            <button className="ghost" onClick={resetAttempt}>Очистить</button>
+            <div className="headActions">
+              <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
+              <button className="ghost" onClick={resetAttempt}>Очистить</button>
+            </div>
           </div>
+          {copyState && <p className="copyState">{copyState}</p>}
 
           <div className="dialogWindow" aria-label="Диалог с клиентом">
             {messages.map((message) => (
