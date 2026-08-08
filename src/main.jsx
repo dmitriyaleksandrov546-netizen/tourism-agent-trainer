@@ -2,6 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
+import {
+  clearDialogHistory,
+  createDialogRecord,
+  formatDialogRecord,
+  loadDialogHistory,
+  removeDialogRecord,
+  upsertDialogRecord
+} from './dialogHistoryStore.js';
+import { deleteServerDialogRecord, fetchServerDialogHistory, saveServerDialogRecord } from './dialogHistoryApi.js';
 import './styles.css';
 
 function App() {
@@ -11,6 +20,9 @@ function App() {
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
+  const [activeView, setActiveView] = useState('trainer');
+  const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
+  const [historyMode, setHistoryMode] = useState('local');
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
 
@@ -31,22 +43,42 @@ function App() {
     setCopyState('');
   };
 
-  const copyDialogue = async () => {
-    const lines = [
-      `Сценарий: ${activeScenario.shortTitle} — ${activeScenario.shortSubtitle}`,
-      `Уровень: ${activeScenario.level}`,
-      '',
-      ...messages.map((message) => `${message.role === 'client' ? 'Клиент' : 'Агент'}: ${message.text}`),
-      ...(draft.trim() ? ['', `Черновик агента: ${draft.trim()}`] : []),
-      ...(lastEvaluation ? ['', `Последний балл: ${lastEvaluation.score}/100`, `Вердикт: ${lastEvaluation.verdict}`] : [])
-    ];
-
+  const copyText = async (text, okText = 'Скопировано') => {
     try {
-      await navigator.clipboard.writeText(lines.join('\n'));
-      setCopyState('Скопировано');
+      await navigator.clipboard.writeText(text);
+      setCopyState(okText);
     } catch (_error) {
       setCopyState('Не удалось скопировать');
     }
+  };
+
+  const copyDialogue = async () => {
+    const record = createDialogRecord({ scenario: activeScenario, messages, evaluation: lastEvaluation });
+    const text = formatDialogRecord({ ...record, messages: draft.trim() ? [...messages, { role: 'agent', text: draft.trim() }] : messages });
+    await copyText(text);
+  };
+
+  const copyHistoryRecord = async (record) => copyText(formatDialogRecord(record), 'Диалог скопирован');
+
+  const openHistoryRecord = (record) => {
+    setActiveScenarioId(record.scenarioId);
+    setMessages(record.messages || []);
+    setDraft('');
+    setLastEvaluation(record.score !== null ? { score: record.score, verdict: record.verdict, dimensions: [], topFixes: [] } : null);
+    setActiveView('trainer');
+    setCopyState('Диалог открыт из истории');
+  };
+
+  const deleteHistoryRecord = (id) => {
+    setDialogHistory(removeDialogRecord(id));
+    deleteServerDialogRecord(id).then((result) => {
+      if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(history.records));
+    });
+  };
+
+  const clearHistory = () => {
+    setDialogHistory(clearDialogHistory());
+    setCopyState('История очищена');
   };
 
   const sendReply = async () => {
@@ -68,13 +100,38 @@ function App() {
     setIsSending(true);
 
     const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages });
-    setMessages((current) => current.map((message) => (
+    const finalMessages = nextMessages.map((message) => (
       message.id === thinkingId
         ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
         : message
-    )));
+    ));
+    setMessages(finalMessages);
+    const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation });
+    setDialogHistory(upsertDialogRecord(record));
+    saveServerDialogRecord(record).then((result) => {
+      if (result.ok) {
+        setHistoryMode('supabase');
+        fetchServerDialogHistory().then((history) => {
+          if (history.ok) setDialogHistory(history.records);
+        });
+      }
+    });
     setIsSending(false);
   };
+
+  useEffect(() => {
+    let alive = true;
+    fetchServerDialogHistory().then((result) => {
+      if (!alive) return;
+      if (result.ok && result.records.length) {
+        setDialogHistory(result.records);
+        setHistoryMode('supabase');
+      } else if (result.configured) {
+        setHistoryMode('supabase');
+      }
+    });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     const handleGlobalEnter = (event) => {
@@ -103,23 +160,33 @@ function App() {
       <section className="layout">
         <section className="card situations">
           <nav className="sideMenu" aria-label="Меню платформы">
-            <button className="active" type="button">Тренажёр</button>
+            <button className={activeView === 'trainer' ? 'active' : ''} type="button" onClick={() => setActiveView('trainer')}>Тренажёр</button>
+            <button className={activeView === 'history' ? 'active' : ''} type="button" onClick={() => setActiveView('history')}>История тестов</button>
             <button type="button" disabled>База отелей</button>
             <button type="button" disabled>Тесты</button>
             <button type="button" disabled>Стажёры</button>
             <button type="button" disabled>Настройки</button>
           </nav>
 
-          <h2>Ситуации</h2>
-          <div className="situationList">
-            {scenarios.map((scenario, index) => (
-              <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
-                <small>Уровень {index + 1} · {scenario.level}</small>
-                <b>{scenario.shortTitle}</b>
-                <span>{scenario.shortSubtitle}</span>
-              </button>
-            ))}
-          </div>
+          {activeView === 'trainer' ? <>
+            <h2>Ситуации</h2>
+            <div className="situationList">
+              {scenarios.map((scenario, index) => (
+                <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                  <small>Уровень {index + 1} · {scenario.level}</small>
+                  <b>{scenario.shortTitle}</b>
+                  <span>{scenario.shortSubtitle}</span>
+                </button>
+              ))}
+            </div>
+          </> : <HistoryPanel
+            records={dialogHistory}
+            mode={historyMode}
+            onOpen={openHistoryRecord}
+            onCopy={copyHistoryRecord}
+            onDelete={deleteHistoryRecord}
+            onClear={clearHistory}
+          />}
         </section>
 
         <section className="card trainer">
@@ -163,6 +230,37 @@ function App() {
         </section>
       </section>
     </main>
+  );
+}
+
+function HistoryPanel({ records, mode, onOpen, onCopy, onDelete, onClear }) {
+  return (
+    <section className="historyPanel">
+      <div className="historyHead">
+        <h2>История тестов</h2>
+        {!!records.length && <button className="ghost danger" type="button" onClick={onClear}>Очистить</button>}
+      </div>
+      <p className="historyMode">Хранилище: {mode === 'supabase' ? 'Supabase база' : 'локально в этом браузере'}</p>
+      {!records.length ? (
+        <p className="emptyHistory">Пока пусто. Пройдите диалог — он сохранится здесь автоматически.</p>
+      ) : (
+        <div className="historyList">
+          {records.map((record) => (
+            <article className="historyItem" key={record.id}>
+              <small>{new Date(record.createdAt).toLocaleString('ru-RU')} · {record.level}</small>
+              <b>{record.scenarioTitle}</b>
+              <span>{record.score !== null ? `${record.score}/100 · ${record.verdict}` : 'без оценки'}</span>
+              <p>{record.lastClient || record.lastAgent}</p>
+              <div className="historyActions">
+                <button type="button" onClick={() => onOpen(record)}>Открыть</button>
+                <button type="button" onClick={() => onCopy(record)}>Копировать</button>
+                <button type="button" onClick={() => onDelete(record.id)}>Удалить</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
