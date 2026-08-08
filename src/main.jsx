@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { corpusInsights, createInitialMessages, evaluateAgentReply, getNextClientReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { corpusInsights, createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { requestNeuroclientReply } from './neuroclientApi.js';
 import './styles.css';
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
   const [messages, setMessages] = useState(() => createInitialMessages('turkey-family-hard'));
   const [draft, setDraft] = useState('');
   const [lastEvaluation, setLastEvaluation] = useState(null);
+  const [isSending, setIsSending] = useState(false);
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
   const clientMessage = messages.find((message) => message.role === 'client')?.text || activeScenario.startMessage;
@@ -18,28 +20,41 @@ function App() {
     setMessages(createInitialMessages(id));
     setDraft('');
     setLastEvaluation(null);
+    setIsSending(false);
   };
 
   const resetAttempt = () => {
     setMessages(createInitialMessages(activeScenarioId));
     setDraft('');
     setLastEvaluation(null);
+    setIsSending(false);
   };
 
-  const sendReply = () => {
+  const sendReply = async () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || isSending) return;
 
     const evaluation = evaluateAgentReply(text, activeScenario);
-    const nextReply = getNextClientReply(activeScenarioId, text, messages.filter((m) => m.role === 'agent').length + 1);
+    const turn = messages.filter((m) => m.role === 'agent').length + 1;
+    const thinkingId = `client-thinking-${Date.now()}`;
+    const nextMessages = [
+      ...messages,
+      { id: `agent-${messages.length}`, role: 'agent', text, time: 'ваш ответ' },
+      { id: thinkingId, role: 'client', text: '...', time: 'клиент думает' }
+    ];
 
-    setMessages((current) => [
-      ...current,
-      { id: `agent-${current.length}`, role: 'agent', text, time: 'ваш ответ' },
-      { id: `client-${current.length + 1}`, role: 'client', text: nextReply, time: 'ответ клиента' }
-    ]);
+    setMessages(nextMessages);
     setLastEvaluation(evaluation);
     setDraft('');
+    setIsSending(true);
+
+    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages });
+    setMessages((current) => current.map((message) => (
+      message.id === thinkingId
+        ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
+        : message
+    )));
+    setIsSending(false);
   };
 
   return (
@@ -87,7 +102,7 @@ function App() {
             />
           </label>
 
-          <button className="primary" onClick={sendReply}>Проверить</button>
+          <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
 
           {lastEvaluation && <ClientPushback text={lastClientReply} />}
           {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
