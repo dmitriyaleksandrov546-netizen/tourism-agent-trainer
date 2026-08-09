@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { filterTourvisionHotels, tourvisionHotels } from './tourvisionData.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import {
   clearDialogHistory,
@@ -23,8 +24,10 @@ function App() {
   const [activeView, setActiveView] = useState('trainer');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
+  const [tourvisionQuery, setTourvisionQuery] = useState('');
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
+  const filteredTourvisionHotels = useMemo(() => filterTourvisionHotels(tourvisionQuery), [tourvisionQuery]);
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
@@ -147,89 +150,146 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalEnter);
   }, [draft, isSending, activeScenarioId, messages]);
 
+  const isTrainer = activeView === 'trainer';
+
   return (
-    <main className="app">
-      <header className="top">
-        <div>
-          <p className="kicker">Тренажёр турагента</p>
-          <h1>Ответьте клиенту. Получите короткий разбор.</h1>
-        </div>
-        {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
-      </header>
+    <main className="appShell">
+      <aside className="leftRail" aria-label="Главное меню">
+        <button
+          className={isTrainer ? 'active' : ''}
+          type="button"
+          onClick={() => setActiveView('trainer')}
+          title="Тренажёр"
+          aria-label="Тренажёр"
+        >
+          <span>ТР</span>
+        </button>
+        <button
+          className={activeView === 'tourvision' ? 'active' : ''}
+          type="button"
+          onClick={() => setActiveView('tourvision')}
+          title="Турвижен"
+          aria-label="Турвижен"
+        >
+          <span>TV</span>
+        </button>
+      </aside>
 
-      <section className="layout">
-        <section className="card situations">
-          <nav className="sideMenu" aria-label="Меню платформы">
-            <button className={activeView === 'trainer' ? 'active' : ''} type="button" onClick={() => setActiveView('trainer')}>Тренажёр</button>
-            <button className={activeView === 'history' ? 'active' : ''} type="button" onClick={() => setActiveView('history')}>История тестов</button>
-            <button type="button" disabled>База отелей</button>
-            <button type="button" disabled>Тесты</button>
-            <button type="button" disabled>Стажёры</button>
-            <button type="button" disabled>Настройки</button>
-          </nav>
-
-          {activeView === 'trainer' ? <>
-            <h2>Ситуации</h2>
-            <div className="situationList">
-              {scenarios.map((scenario, index) => (
-                <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
-                  <small>Уровень {index + 1} · {scenario.level}</small>
-                  <b>{scenario.shortTitle}</b>
-                  <span>{scenario.shortSubtitle}</span>
-                </button>
-              ))}
-            </div>
-          </> : <HistoryPanel
-            records={dialogHistory}
-            mode={historyMode}
-            onOpen={openHistoryRecord}
-            onCopy={copyHistoryRecord}
-            onDelete={deleteHistoryRecord}
-            onClear={clearHistory}
-          />}
-        </section>
-
-        <section className="card trainer">
-          <div className="sectionHead">
-            <h2>2. Ответьте клиенту</h2>
-            <div className="headActions">
-              <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
-              <button className="ghost" onClick={resetAttempt}>Очистить</button>
-            </div>
+      <section className="appContent">
+        <header className="top">
+          <div>
+            <p className="kicker">{isTrainer ? 'Тренажёр турагента' : 'Турвижен'}</p>
+            <h1>{isTrainer ? 'Ответьте клиенту. Получите короткий разбор.' : 'Подбор отелей по параметрам клиента.'}</h1>
           </div>
-          {copyState && <p className="copyState">{copyState}</p>}
+          {isTrainer && lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
+        </header>
 
-          <div className="dialogWindow" aria-label="Диалог с клиентом">
-            {messages.map((message) => (
-              <article key={message.id} className={`dialogMessage ${message.role}`}>
-                <span>{message.role === 'client' ? 'Клиент' : 'Вы'}</span>
-                <p>{message.text}</p>
-                <small>{message.time}</small>
-              </article>
-            ))}
-          </div>
+        {isTrainer ? (
+          <section className="layout">
+            <section className="card situations">
+              <h2>Ситуации</h2>
+              <div className="situationList">
+                {scenarios.map((scenario, index) => (
+                  <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                    <small>Уровень {index + 1} · {scenario.level}</small>
+                    <b>{scenario.shortTitle}</b>
+                    <span>{scenario.shortSubtitle}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-          <label className="answerBox">
-            <span>Напишите ответ как в WhatsApp.</span>
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Напишите как клиенту в WhatsApp. Enter — отправить, Shift+Enter — новая строка."
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  sendReply();
-                }
-              }}
-            />
-          </label>
+            <section className="card trainer">
+              <div className="sectionHead">
+                <h2>2. Ответьте клиенту</h2>
+                <div className="headActions">
+                  <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
+                  <button className="ghost" onClick={resetAttempt}>Очистить</button>
+                </div>
+              </div>
+              {copyState && <p className="copyState">{copyState}</p>}
 
-          <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
+              <div className="dialogWindow" aria-label="Диалог с клиентом">
+                {messages.map((message) => (
+                  <article key={message.id} className={`dialogMessage ${message.role}`}>
+                    <span>{message.role === 'client' ? 'Клиент' : 'Вы'}</span>
+                    <p>{message.text}</p>
+                    <small>{message.time}</small>
+                  </article>
+                ))}
+              </div>
 
-          {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
-        </section>
+              <label className="answerBox">
+                <span>Напишите ответ как в WhatsApp.</span>
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Напишите как клиенту в WhatsApp. Enter — отправить, Shift+Enter — новая строка."
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      sendReply();
+                    }
+                  }}
+                />
+              </label>
+
+              <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
+
+              {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
+            </section>
+          </section>
+        ) : (
+          <TourvisionPage
+            query={tourvisionQuery}
+            hotels={filteredTourvisionHotels}
+            total={tourvisionHotels.length}
+            onQueryChange={setTourvisionQuery}
+          />
+        )}
       </section>
     </main>
+  );
+}
+
+function TourvisionPage({ query, hotels, total, onQueryChange }) {
+  return (
+    <section className="tourvisionPage">
+      <section className="card tourvisionPanel">
+        <div className="sectionHead tourvisionHead">
+          <div>
+            <h2>Турвижен</h2>
+            <p>Введите параметры: страна, курорт, формат отдыха, риск или уровень уверенности.</p>
+          </div>
+          <span>{hotels.length} из {total}</span>
+        </div>
+
+        <label className="tourvisionSearch">
+          <span>Параметры подбора</span>
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Например: Турция дети риск / Египет риф / Дубай депозит"
+          />
+        </label>
+
+        <div className="tourvisionResults">
+          {hotels.map((hotel) => (
+            <article key={hotel.name} className="hotelCard">
+              <div>
+                <small>{hotel.country} · {hotel.resort} · {hotel.segment}</small>
+                <h3>{hotel.name}</h3>
+              </div>
+              <p><b>Кому подходит:</b> {hotel.fit}</p>
+              <p><b>Кому не продавать:</b> {hotel.notFor}</p>
+              <p><b>Риск:</b> {hotel.risk}</p>
+              <footer>{hotel.source} · проверено: {hotel.checkedAt} · уверенность: {hotel.confidence}</footer>
+            </article>
+          ))}
+          {!hotels.length && <p className="emptyHistory">Ничего не найдено. Уберите часть параметров или проверьте формулировку.</p>}
+        </div>
+      </section>
+    </section>
   );
 }
 
@@ -309,3 +369,4 @@ function buildBetterExample(evaluation, scenario) {
 }
 
 createRoot(document.getElementById('root')).render(<App />);
+
