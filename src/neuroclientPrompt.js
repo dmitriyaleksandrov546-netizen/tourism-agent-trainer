@@ -1,4 +1,4 @@
-import { getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import { analyzeSelectionLink, getNextClientReply, getScenarioById } from './simulatorEngine.js';
 
 const abusePatterns = [
   'блять', 'бляд', 'сука', 'нахуй', 'хуй', 'пизд', 'еба', 'ёба', 'заеб', 'мудак', 'идиот'
@@ -34,7 +34,20 @@ function createPoliteProcessAcceptance(scenarioId) {
   return 'Окей, хорошо, подожду. Посмотрите варианты и напишите, что реально подходит под мой запрос.';
 }
 
-export function createFallbackReply(scenarioId, agentText = '', turn = 1, history = []) {
+function createSelectionReviewFallback(scenarioId, selectionAnalysis = null) {
+  const analysis = selectionAnalysis || analyzeSelectionLink(scenarioId);
+  return `${analysis.clientReply} Мне нужен не просто новый список отелей, а понятный вывод: что оставляем, что меняем и почему. Если компромисс оправдан — объясните его коротко, если нет — лучше замените вариант.`;
+}
+
+export function createFallbackReply(scenarioId, agentText = '', turn = 1, history = [], options = {}) {
+  if (options.phase === 'selection-review') {
+    return {
+      text: createSelectionReviewFallback(scenarioId, options.selectionAnalysis),
+      source: 'local-fallback',
+      risk: 'selection-review-needs-manager-decision'
+    };
+  }
+
   if (containsAbuse(agentText)) {
     if (countRudeAgentMessages(history) > 0) {
       return {
@@ -66,10 +79,11 @@ export function createFallbackReply(scenarioId, agentText = '', turn = 1, histor
   };
 }
 
-export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, history = [] }) {
+export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, history = [], phase = 'dialogue', selectionAnalysis = null }) {
   const scenario = getScenarioById(scenarioId);
+  const analysis = selectionAnalysis || (phase === 'selection-review' ? analyzeSelectionLink(scenarioId) : null);
   const hotelFacts = scenario.hotelContext
-    .map((hotel) => `- ${hotel.name}: подходит: ${hotel.fit}; риск: ${hotel.risk}; уверенность: ${hotel.confidence}; источник: ${hotel.source}`)
+    .map((hotel) => `- ${hotel.name}: страна: ${hotel.country || scenario.direction}; звёзды: ${hotel.stars || 'не указано'}; подходит: ${hotel.fit}; риск: ${hotel.risk}; компромисс: ${hotel.compromise || 'не описан'}; Яндекс: ${hotel.yandexReviewSignal || 'нет сигнала'}; Tripadvisor: ${hotel.tripadvisorReviewSignal || 'нет сигнала'}; уверенность: ${hotel.confidence}; источник: ${hotel.source}`)
     .join('\n');
   const conversation = history
     .map((message) => `${message.role === 'agent' ? 'Турагент' : 'Клиент'}: ${message.text}`)
@@ -85,6 +99,8 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       'Если агент впервые грубит, матерится, давит или обесценивает клиента — сразу поставь дистанцию: без мата, в таком тоне не продолжаю. Мат в клиентском общении неприемлем.',
       'Если агент отвечает совсем пусто и не предлагает понятный следующий шаг — мягко уточни, что именно он будет смотреть. Не прессуй на первом нормальном ответе.',
       'Если агент обещает невозможное или гарантирует без источника — спокойно усомнись и попроси честный риск.',
+      'Если этап называется selection-review: ты уже открыл(а) ссылку на подборку, сравнил(а) отели с исходным запросом, прочитал(а) отзывы на Яндексе и Tripadvisor и теперь ждёшь от менеджера вывод: что оставить, что заменить, какие компромиссы допустимы и какой следующий шаг.',
+      'На этапе selection-review оценивай не факт отправки ссылки, а качество подборки: страна, название отеля, звёзды, удобства, бюджет, отзывы, объяснение компромисса.',
       'Не выдумывай факты об отелях вне переданного контекста. Если факта нет — спрашивай, как агент это проверит.',
       'Пиши по-русски, разговорно, без канцелярита. 1–3 коротких абзаца. Без списков, без оценки балла, без советов агенту.'
     ].join('\n'),
@@ -95,6 +111,7 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       `Скрытая настоящая потребность: ${scenario.clientProfile.hiddenNeed}`,
       `Триггер/страх: ${scenario.clientProfile.trigger}`,
       `Ход диалога: ${turn}`,
+      `Этап: ${phase}`,
       '',
       'Факты по отелям, которыми можно пользоваться:',
       hotelFacts,
@@ -102,6 +119,14 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       'История диалога:',
       conversation || '(пока только старт сценария)',
       '',
+      ...(analysis ? [
+        'Анализ подборки после ссылки:',
+        `Критерии клиента: ${analysis.criteria.join(', ')}`,
+        `Оценка качества подборки: ${analysis.qualityScore}/100`,
+        `Проблемы: ${analysis.gaps.join(' ') || 'критичных проблем нет'}`,
+        `Твоя текущая реакция как клиента: ${analysis.clientReply}`,
+        ''
+      ] : []),
       `Последний ответ турагента: ${agentText}`,
       '',
       'Ответь только как клиент. Не объясняй правила тренажёра.'

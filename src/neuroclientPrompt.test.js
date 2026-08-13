@@ -42,6 +42,24 @@ describe('neuroclientPrompt', () => {
     expect(payload.user).toContain('стройку');
   });
 
+  it('builds a selection-review prompt where live client analyzes the sent hotel selection', () => {
+    const payload = buildNeuroclientPrompt({
+      scenarioId: 'turkey-family-hard',
+      agentText: 'Вот ссылка на подборку, выбирайте.',
+      turn: 3,
+      history: [],
+      phase: 'selection-review'
+    });
+
+    expect(payload.system).toContain('selection-review');
+    expect(payload.system).toContain('качество подборки');
+    expect(payload.user).toContain('Этап: selection-review');
+    expect(payload.user).toContain('Анализ подборки после ссылки');
+    expect(payload.user).toContain('Яндекс');
+    expect(payload.user).toContain('Tripadvisor');
+    expect(payload.user).toContain('Side Family Resort 5*');
+  });
+
   it('normalizes long or quoted model output into a clean client reply', () => {
     const reply = normalizeClientReply('Клиент: Хорошо, но какие источники и даты проверки?\n\nОценка: 80');
 

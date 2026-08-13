@@ -79,6 +79,9 @@ h3 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .chatPanel { min-height: 760px; display: flex; flex-direction: column; overflow: hidden; }
 .ghostButton { border: 1px solid var(--line); background: rgba(255,255,255,.65); color: var(--green-dark); border-radius: 13px; padding: 9px 11px; display: flex; gap: 7px; align-items: center; font-weight: 800; }
 .briefCard { margin: 0 18px 14px; border-radius: 20px; background: rgba(16,39,32,.05); border: 1px solid var(--line); padding: 14px; display: grid; gap: 7px; color: #33443f; font-size: 14px; }
+.selectionCard { margin: 0 18px 14px; border-radius: 20px; background: #fff8ea; border: 1px solid rgba(244,162,97,.42); padding: 14px; display: grid; gap: 8px; color: #4d3920; font-size: 13px; }
+.selectionCard .panelHead { padding: 0; margin-bottom: 0; }
+.selectionCard p { margin: 0; line-height: 1.42; }
 .clientMode { margin: 0 18px 12px; border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; background: #fff0d7; color: #8b4a13; border: 1px solid rgba(244,162,97,.28); font-size: 12px; font-weight: 850; }
 .clientMode.live { background: rgba(223,246,236,.72); color: var(--green-dark); border-color: rgba(15,143,111,.2); }
 .messagesArea { flex: 1; padding: 8px 18px; overflow: auto; display: grid; align-content: start; gap: 12px; max-height: 390px; }

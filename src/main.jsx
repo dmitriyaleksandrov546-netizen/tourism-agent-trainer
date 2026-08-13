@@ -33,7 +33,7 @@ import {
   testQuestions,
   trainingTasks
 } from './appData.js';
-import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, analyzeSelectionLink } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import { appendDictation, cleanDictationText } from './dictation.js';
 import './styles.css';
@@ -54,6 +54,8 @@ function App() {
   const [messages, setMessages] = useState(() => createInitialMessages('turkey-family-hard'));
   const [draft, setDraft] = useState('');
   const [lastEvaluation, setLastEvaluation] = useState(null);
+  const [activePhase, setActivePhase] = useState('dialogue');
+  const [selectionAnalysis, setSelectionAnalysis] = useState(null);
   const [mode, setMode] = useState('agent');
   const [hotelQuery, setHotelQuery] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -72,6 +74,8 @@ function App() {
     setMessages(createInitialMessages(id));
     setDraft('');
     setLastEvaluation(null);
+    setSelectionAnalysis(null);
+    setActivePhase('dialogue');
     setActiveSectionId('trainer');
   };
 
@@ -79,7 +83,7 @@ function App() {
     const text = draft.trim();
     if (!text || isSending) return;
 
-    const evaluation = evaluateAgentReply(text, activeScenarioId);
+    const evaluation = evaluateAgentReply(text, activeScenarioId, { phase: activePhase });
     const turn = messages.filter((m) => m.role === 'agent').length + 1;
     const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const thinkingId = `client-thinking-${Date.now()}`;
@@ -94,7 +98,14 @@ function App() {
     setDraft('');
     setIsSending(true);
 
-    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages });
+    const reply = await requestNeuroclientReply({
+      scenarioId: activeScenarioId,
+      agentText: text,
+      turn,
+      history: messages,
+      phase: activePhase,
+      selectionAnalysis
+    });
     setClientSource(reply.source || 'local-fallback');
     setMessages((current) => current.map((message) => (
       message.id === thinkingId
@@ -106,6 +117,19 @@ function App() {
 
   const quickInsert = (text) => {
     setDraft((current) => (current ? `${current}\n${text}` : text));
+  };
+
+  const simulateSelectionReview = () => {
+    const analysis = analyzeSelectionLink(activeScenarioId);
+    setSelectionAnalysis(analysis);
+    setActivePhase('selection-review');
+    setMessages((current) => [
+      ...current,
+      { id: `agent-selection-${Date.now()}`, role: 'agent', text: 'Я отправил(а) вам ссылку на подборку. Посмотрите, пожалуйста, отели, отзывы и где для вас есть сомнения.', time: 'ссылка на подборку' },
+      { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: 'клиент изучил подборку' }
+    ]);
+    setLastEvaluation(null);
+    setDraft('');
   };
 
   const polishDraft = () => {
@@ -220,6 +244,9 @@ function App() {
             voiceState={voiceState}
             voiceMessage={voiceMessage}
             clientSource={clientSource}
+            activePhase={activePhase}
+            selectionAnalysis={selectionAnalysis}
+            onSimulateSelectionReview={simulateSelectionReview}
           />
         )}
         {activeSectionId === 'hotels' && <HotelsPage query={hotelQuery} onQueryChange={setHotelQuery} hotels={filteredHotels} />}
@@ -253,7 +280,7 @@ function DashboardPage({ readiness, onOpenTrainer }) {
   );
 }
 
-function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEvaluation, onDraftChange, onQuickInsert, onSelectScenario, onSendReply, onStartDictation, onStopDictation, onPolishDraft, isSending, voiceState, voiceMessage, clientSource }) {
+function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEvaluation, onDraftChange, onQuickInsert, onSelectScenario, onSendReply, onStartDictation, onStopDictation, onPolishDraft, isSending, voiceState, voiceMessage, clientSource, activePhase, selectionAnalysis, onSimulateSelectionReview }) {
   return (
     <section className="workspaceGrid">
       <div className="panel scenarioPanel">
@@ -273,9 +300,10 @@ function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEv
       <div className="panel chatPanel">
         <div className="chatHeader"><div><p className="eyebrow">Активный диалог</p><h3>{activeScenario.title}</h3></div><button className="ghostButton" onClick={() => onSelectScenario(activeScenarioId)}><Play size={15} /> Перезапустить</button></div>
         <div className={`clientMode ${clientSource === 'openai' ? 'live' : ''}`}>
-          <Brain size={15} /> {clientSource === 'openai' ? 'Режим: живой AI-клиент понимает контекст' : 'Режим: локальная страховочная логика. Для настоящего клиента нужен backend-link.'}
+          <Brain size={15} /> {activePhase === 'selection-review' ? 'Этап: клиент изучил ссылку на подборку. Оцениваем качество отелей, отзывы и следующий шаг менеджера.' : clientSource === 'openai' ? 'Режим: живой AI-клиент понимает контекст' : 'Режим: локальная страховочная логика. Для настоящего клиента нужен backend-link.'}
         </div>
         <div className="briefCard"><div><b>Клиент:</b> {activeScenario.clientProfile.name}, {activeScenario.clientProfile.family}</div><div><b>Скрытая боль:</b> {activeScenario.clientProfile.hiddenNeed}</div><div><b>Триггер:</b> {activeScenario.clientProfile.trigger}</div></div>
+        {selectionAnalysis && <SelectionAnalysisCard analysis={selectionAnalysis} />}
         <div className="messagesArea">
           {messages.map((message) => (
             <div key={message.id} className={`messageRow ${message.role}`}><div className="bubble"><span>{message.role === 'client' ? 'Нейроклиент' : 'Агент'}</span><p>{message.text}</p><small>{message.time}</small></div></div>
@@ -285,6 +313,7 @@ function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEv
           <button onClick={() => onQuickInsert('Уточню возраст детей, бюджет, даты, пляж, питание и что для вас критично, а где готовы к компромиссу.')}>+ Уточнить потребности</button>
           <button onClick={() => onQuickInsert('Сразу честно предупрежу по рискам и проверю отзывы по свежим датам, чтобы не обещать лишнего.')}>+ Риски</button>
           <button onClick={() => onQuickInsert('Предложу 2–3 варианта: в бюджет, комфортнее и самый безопасный для семьи.')}>+ Вилка отелей</button>
+          <button onClick={onSimulateSelectionReview}>+ Отправил подборку</button>
         </div>
         <div className="voiceBar">
           <button className={voiceState === 'listening' ? 'recording' : ''} onClick={voiceState === 'listening' ? onStopDictation : onStartDictation}>
@@ -318,6 +347,18 @@ function TrainerPage({ activeScenario, activeScenarioId, messages, draft, lastEv
         <div className="panel objectivesPanel"><div className="panelHead"><div><p className="eyebrow">Цели тренировки</p><h3>Что должен сделать агент</h3></div><GraduationCap size={18} /></div><ul>{activeScenario.objectives.map((objective) => <li key={objective}>{objective}</li>)}</ul></div>
       </aside>
     </section>
+  );
+}
+
+function SelectionAnalysisCard({ analysis }) {
+  return (
+    <div className="selectionCard">
+      <div className="panelHead"><div><p className="eyebrow">Этап после ссылки</p><h3>Клиент изучил подборку · качество {analysis.qualityScore}/100</h3></div></div>
+      <p><b>Что проверил клиент:</b> страна, отели, звёзды, удобства, бюджет, компромиссы, Яндекс и Tripadvisor.</p>
+      <p><b>Исходные критерии:</b> {analysis.criteria.join(', ')}</p>
+      <p><b>Проблема:</b> {analysis.gaps.join(' ') || 'Критичных разрывов нет.'}</p>
+      <p><b>Что должен сделать менеджер:</b> {analysis.managerTask}</p>
+    </div>
   );
 }
 

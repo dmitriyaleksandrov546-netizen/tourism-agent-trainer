@@ -24,26 +24,42 @@ export const scenarios = [
     hotelContext: [
       {
         name: 'Side Family Resort 5*',
+        country: 'Турция',
+        stars: '5*',
         fit: 'сильный детский блок, песчаный пляж',
         risk: 'номера частично уставшие, в сезон очереди в ресторане',
+        compromise: 'проходит ближе к бюджету, но питание и номерной фонд слабее ожиданий',
+        yandexReviewSignal: 'хвалят пляж и детскую анимацию, ругают очереди в ресторане',
+        tripadvisorReviewSignal: 'отмечают уставшие номера, но семейный формат считают понятным',
         confidence: 'средняя',
         source: 'карточка агентства · проверено 18.07.2026'
       },
       {
         name: 'Belek Aqua Club 5*',
+        country: 'Турция',
+        stars: '5*',
         fit: 'аквапарк, зелёная территория, питание выше среднего',
         risk: 'обычно выше бюджета, надо ловить даты',
+        compromise: 'лучше закрывает запрос детей, но почти точно дороже 180 000 ₽',
+        yandexReviewSignal: 'часто хвалят питание и территорию',
+        tripadvisorReviewSignal: 'пишут, что детская инфраструктура сильнее среднего',
         confidence: 'высокая',
         source: 'оператор + отзывы · проверено 17.07.2026'
       },
       {
         name: 'Alanya Sun Beach 4+',
+        country: 'Турция',
+        stars: '4+',
         fit: 'может пройти по бюджету',
         risk: 'трансфер дольше, вход в море неидеален для 2 лет',
+        compromise: 'дешевле, но уступка по звёздам, трансферу и заходу в море для младшего ребёнка',
+        yandexReviewSignal: 'часть семей жалуется на долгий трансфер',
+        tripadvisorReviewSignal: 'пляж называют нормальным, но не идеальным для малышей',
         confidence: 'средняя',
         source: 'отзывы + менеджеры · проверено 16.07.2026'
       }
-    ]
+    ],
+    selectionCriteria: ['Турция', '5*', 'первая линия', 'песок', 'аквапарк', 'хорошее питание', 'детям 2 и 11 лет', 'до 180 000 ₽']
   },
   {
     id: 'egypt-budget-objections',
@@ -136,6 +152,26 @@ const conceptRules = {
     label: 'Тон без канцелярита',
     points: 10,
     patterns: ['понимаю', 'давайте', 'сразу', 'спокойно', 'по-честному', 'коротко', 'ок', 'хорошо']
+  },
+  selectionQuality: {
+    label: 'Разбор качества подборки',
+    points: 16,
+    patterns: ['подборк', 'отель', 'звезд', 'звёзд', 'страна', 'критери', 'удобств', 'пляж', 'питани', 'аквапарк', 'трансфер']
+  },
+  reviewSources: {
+    label: 'Отзывы и источники',
+    points: 14,
+    patterns: ['яндекс', 'tripadvisor', 'трипадвайзер', 'отзыв', 'пишут', 'хвалят', 'ругают', 'источник']
+  },
+  compromiseExplanation: {
+    label: 'Объяснение компромисса',
+    points: 14,
+    patterns: ['компромисс', 'зато', 'но', 'уступ', 'дешевле', 'дороже', 'важнее', 'замен']
+  },
+  managerDecision: {
+    label: 'Решение менеджера после реакции клиента',
+    points: 14,
+    patterns: ['заменю', 'корректир', 'уточню', 'оставляем', 'меняем', 'добавлю', 'покажу разницу', 'следующий шаг']
   }
 };
 
@@ -184,12 +220,19 @@ function isKeywordStuffing(normalized = '') {
   return hits >= 6 && !hasAny(normalized, logicMarkers) && countWords(normalized) <= 24;
 }
 
+function activeRuleKeys(options = {}) {
+  const base = ['needs', 'risk', 'value', 'alternatives', 'objection', 'nextStep', 'tone'];
+  const selection = ['selectionQuality', 'reviewSources', 'compromiseExplanation', 'managerDecision'];
+  return options.phase === 'selection-review' ? selection.concat(['risk', 'nextStep', 'tone']) : base;
+}
+
 function scoreRule(normalized, key, scenario) {
   const rule = conceptRules[key];
   const hits = rule.patterns.filter((pattern) => normalized.includes(pattern));
   const scenarioHits = (scenarioRequiredSignals[scenario.id]?.[key] || []).filter((pattern) => normalized.includes(pattern));
   const hasLogic = hasAny(normalized, logicMarkers) || key === 'nextStep' || key === 'tone';
   let multiplier = hits.length ? 0.7 : 0;
+  if (['selectionQuality', 'reviewSources', 'compromiseExplanation', 'managerDecision'].includes(key) && hits.length >= 2 && hasLogic) multiplier = 1;
   if (key === 'nextStep' && hits.length) multiplier = 1;
   if (scenarioHits.length) multiplier = 1;
   if (hits.length && !hasLogic) multiplier *= 0.6;
@@ -205,16 +248,20 @@ function scoreRule(normalized, key, scenario) {
   };
 }
 
-export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard') {
+export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard', options = {}) {
   const scenario = getScenarioById(scenarioId);
   const normalized = text.toLowerCase();
   const rudeTone = hasRudeTone(text);
-  const details = Object.keys(conceptRules).map((key) => scoreRule(normalized, key, scenario));
+  const details = activeRuleKeys(options).map((key) => scoreRule(normalized, key, scenario));
   const detected = details.filter((item) => item.status === 'good').map((item) => item.key);
   const dangerousPromisePenalty = dangerousPromisePatterns.some((phrase) => normalized.includes(phrase)) ? (scenario.id === 'uae-premium-anxious' ? 22 : 16) : 0;
   const stuffingPenalty = isKeywordStuffing(normalized) ? 45 : 0;
   const noConcreteNextStepPenalty = !detected.includes('nextStep') ? 8 : 0;
-  const score = rudeTone ? 0 : Math.max(0, Math.min(100, details.reduce((sum, item) => sum + item.earned, 0) - dangerousPromisePenalty - stuffingPenalty - noConcreteNextStepPenalty));
+  const selectionPhasePenalty = options.phase === 'selection-review' && !detected.includes('selectionQuality') ? 18 : 0;
+  const rawScore = details.reduce((sum, item) => sum + item.earned, 0);
+  const maxScore = details.reduce((sum, item) => sum + item.max, 0) || 100;
+  const normalizedScore = Math.round((rawScore / maxScore) * 100);
+  const score = rudeTone ? 0 : Math.max(0, Math.min(100, normalizedScore - dangerousPromisePenalty - stuffingPenalty - noConcreteNextStepPenalty - selectionPhasePenalty));
   const verdict = rudeTone
     ? 'Клиент почти потерян: грубость/мат'
     : stuffingPenalty
@@ -230,12 +277,21 @@ export function evaluateAgentReply(text = '', scenarioId = 'turkey-family-hard')
     missed,
     advice: rudeTone
       ? ['Остановиться и извиниться. Реальный клиент после такого почти точно уйдёт.', 'Вернуться к спокойному тону: “Извините, давайте по делу. Я проверю источники и риски”.']
-      : buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario)
+      : buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario, options)
   };
 }
 
-function buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario) {
+function buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenario, options = {}) {
   if (stuffingPenalty) return ['Не набивай ответ словами. Напиши связку: что понял → где компромисс → что проверишь → когда вернёшься.'];
+  if (options.phase === 'selection-review') {
+    const advice = [];
+    if (!detected.includes('selectionQuality')) advice.push('Сначала разбери качество подборки: страна, отель, звёзды, удобства и попадание в исходные критерии клиента.');
+    if (!detected.includes('reviewSources')) advice.push('Добавь вывод по отзывам на Яндексе и Tripadvisor, а не только рекламное описание отеля.');
+    if (!detected.includes('compromiseExplanation')) advice.push('Объясни компромисс: чего нет, почему это допустимо и что клиент получает взамен.');
+    if (!detected.includes('managerDecision')) advice.push('Скажи, что менеджер делает дальше: меняет подборку, уточняет детали или ведёт к брони/документам.');
+    if (!detected.includes('nextStep')) advice.push('Закрой на конкретный срок следующего действия: сегодня до 18:00, звонок, корректировка или бронь.');
+    return advice.length ? advice.slice(0, 4) : ['Хороший следующий шаг: ты разобрал подборку, отзывы, компромисс и дал понятное действие менеджера.'];
+  }
   const advice = [];
   if (!detected.includes('needs')) {
     if (scenario.clientProfile.children.length) {
@@ -251,6 +307,40 @@ function buildAdvice(detected, dangerousPromisePenalty, stuffingPenalty, scenari
   if (!detected.includes('nextStep')) advice.push('Закрывай на конкретный следующий шаг: созвон, подборку, бронь, фиксацию цены.');
   if (dangerousPromisePenalty) advice.push('Не давай гарантий в стиле “точно понравится” — лучше “проверю по источникам и предупрежу о рисках”.');
   return advice.length ? advice.slice(0, 4) : ['Хороший ответ: есть уточнения, честность, ценность и следующий шаг. Теперь можно сильнее закрывать на бронь.'];
+}
+
+export function analyzeSelectionLink(scenarioId = 'turkey-family-hard') {
+  const scenario = getScenarioById(scenarioId);
+  const hotelFindings = scenario.hotelContext.map((hotel) => ({
+    name: hotel.name,
+    country: hotel.country || scenario.direction.split('/')[0].trim(),
+    stars: hotel.stars || (hotel.name.match(/\d\+?\*/) || ['не указано'])[0],
+    fit: hotel.fit,
+    risk: hotel.risk,
+    compromise: hotel.compromise || 'компромисс не объяснён',
+    yandexReviewSignal: hotel.yandexReviewSignal || 'нет отдельного сигнала из Яндекса',
+    tripadvisorReviewSignal: hotel.tripadvisorReviewSignal || 'нет отдельного сигнала из Tripadvisor',
+    confidence: hotel.confidence
+  }));
+  const hasCompromises = hotelFindings.some((hotel) => /компромисс|дороже|дешевле|уступ|слабее|неидеален/i.test(`${hotel.risk} ${hotel.compromise}`));
+  const hasReviewSignals = hotelFindings.every((hotel) => hotel.yandexReviewSignal && hotel.tripadvisorReviewSignal);
+  const mismatchedHotels = hotelFindings.filter((hotel) => hotel.country !== 'Турция' || !hotel.stars.includes('5'));
+  const gaps = [];
+  if (hasCompromises || mismatchedHotels.length) gaps.push('Не все варианты честно закрывают исходные критерии клиента.');
+  if (!hasReviewSignals) gaps.push('Не хватает проверки отзывов на Яндексе и Tripadvisor.');
+  const qualityScore = Math.max(35, 100 - gaps.length * 18 - mismatchedHotels.length * 8 - (hasCompromises ? 10 : 0));
+  const bestHotel = hotelFindings[0];
+  const compromiseHotel = hotelFindings.find((hotel) => hotel.name.includes('Alanya')) || hotelFindings.find((hotel) => hotel.compromise !== 'компромисс не объяснён');
+
+  return {
+    phase: 'selection-review',
+    qualityScore,
+    criteria: scenario.selectionCriteria || [],
+    hotelFindings,
+    gaps,
+    clientReply: `Я посмотрела подборку по ссылке. По критериям ${scenario.selectionCriteria?.join(', ') || scenario.direction} вижу не просто “подходит/не подходит”, а компромисс. ${bestHotel.name}: ${bestHotel.country}, ${bestHotel.stars}, сильная сторона — ${bestHotel.fit}, но по Яндекс отзывам ${bestHotel.yandexReviewSignal}, а на Tripadvisor ${bestHotel.tripadvisorReviewSignal}. ${compromiseHotel?.name || bestHotel.name} выглядит как уступка: ${compromiseHotel?.compromise || bestHotel.compromise}. Объясните, пожалуйста, почему это нормально для нас, или замените вариант, где слабее питание/детская часть/пляж.`,
+    managerTask: 'Менеджер должен разобрать качество подборки, отзывы, компромиссы и решить: корректировать подборку, уточнять детали или вести к брони.'
+  };
 }
 
 const scenarioResponseDecks = {

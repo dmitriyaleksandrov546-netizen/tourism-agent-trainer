@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateAgentReply, getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import {
+  analyzeSelectionLink,
+  evaluateAgentReply,
+  getNextClientReply,
+  getScenarioById
+} from './simulatorEngine.js';
 
 describe('simulatorEngine', () => {
   it('finds the family turkey scenario with a realistic starting client brief', () => {
@@ -81,5 +86,32 @@ describe('simulatorEngine', () => {
     expect(strong.score).toBeGreaterThan(spam.score);
     expect(strong.detected).toContain('risk');
     expect(strong.detected).toContain('nextStep');
+  });
+
+  it('analyzes a selection link as a client checking hotel fit, compromises and review sources', () => {
+    const analysis = analyzeSelectionLink('turkey-family-hard');
+
+    expect(analysis.clientReply).toContain('Яндекс');
+    expect(analysis.clientReply).toContain('Tripadvisor');
+    expect(analysis.clientReply).toContain('Side Family Resort 5*');
+    expect(analysis.clientReply).toMatch(/компромисс|уступ/i);
+    expect(analysis.qualityScore).toBeLessThan(100);
+    expect(analysis.gaps).toContain('Не все варианты честно закрывают исходные критерии клиента.');
+    expect(analysis.hotelFindings[0]).toMatchObject({
+      country: 'Турция',
+      stars: '5*'
+    });
+  });
+
+  it('scores the manager follow-up after client analyzed the selection, not just link sending', () => {
+    const weak = evaluateAgentReply('Вот ссылка на подборку, выбирайте.', 'turkey-family-hard', { phase: 'selection-review' });
+    const strong = evaluateAgentReply('Да, вижу компромисс: подборка по Турции и Side Family Resort 5* подходит по пляжу, питанию и детям, но по отзывам на Яндексе есть очереди в ресторане. Поэтому либо оставляем его как дешевле, либо я сегодня до 18:00 заменю на вариант с питанием сильнее и честно покажу разницу по цене.', 'turkey-family-hard', { phase: 'selection-review' });
+
+    expect(weak.score).toBeLessThan(45);
+    expect(weak.advice.join(' ')).toContain('разбери качество подборки');
+    expect(strong.score).toBeGreaterThan(weak.score);
+    expect(strong.detected).toContain('selectionQuality');
+    expect(strong.detected).toContain('reviewSources');
+    expect(strong.detected).toContain('managerDecision');
   });
 });
