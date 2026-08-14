@@ -22,7 +22,7 @@ describe('selectionAnalysis', () => {
     expect(prompt.user).toContain('Критерии клиента');
   });
 
-  it('fallback explains that only a link/text was received and asks for real accessible content when needed', () => {
+  it('fallback explains that a URL-only selection was inaccessible and asks for real accessible content', () => {
     const fallback = createSelectionAnalysisFallback({
       scenarioId: 'turkey-family-hard',
       selectionInput: 'https://private.example.com/selection',
@@ -33,5 +33,17 @@ describe('selectionAnalysis', () => {
     expect(fallback.clientReply).toContain('не смогла открыть');
     expect(fallback.clientReply.toLowerCase()).toContain('пришлите');
     expect(fallback.clientReply).not.toContain('Side Family Resort 5*');
+  });
+
+  it('does not mislabel pasted hotel text as an inaccessible link when LLM analysis fails', () => {
+    const fallback = createSelectionAnalysisFallback({
+      scenarioId: 'turkey-family-hard',
+      selectionInput: 'Seven Seas Hotel Life 5*, Кемер, 310 000 ₽, семейный отель, отзывы 4.6/5.',
+      fetchError: 'LLM returned invalid JSON'
+    });
+
+    expect(fallback.clientReply).toContain('Я вижу подборку');
+    expect(fallback.clientReply).not.toContain('не смогла открыть');
+    expect(fallback.gaps.join(' ')).not.toContain('ссылка недоступна');
   });
 });
