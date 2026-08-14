@@ -102,16 +102,22 @@ function App() {
     try {
       const result = await requestSelectionAnalysis({ scenarioId: activeScenarioId, selectionInput: input });
       const analysis = result.analysis;
+      const selectionWasAccessible = !result.fetchError;
+      const clientSelectionTime = selectionWasAccessible ? 'клиент изучил подборку' : 'клиент не смог открыть ссылку';
+      const selectionStatusText = selectionWasAccessible
+        ? 'Клиент изучил реальную подборку и вернулся с вопросами'
+        : 'Ссылка не открылась полностью — клиент попросил доступный текст/скрин.';
+
       setSelectionAnalysis(analysis);
       setActivePhase('selection-review');
       setMessages((current) => [
         ...current,
         { id: `agent-selection-${Date.now()}`, role: 'agent', text: `Я отправил(а) подборку: ${input}`, time: 'подборка от менеджера' },
-        { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: analysis.source === 'live-selection-analysis' ? 'клиент изучил реальную подборку' : 'клиент не смог полноценно проверить' }
+        { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: clientSelectionTime }
       ]);
       setLastEvaluation(null);
       setDraft('');
-      setCopyState(result.fetchError ? 'Ссылка не открылась полностью — клиент попросил доступный текст/скрин.' : 'Клиент изучил реальную подборку и вернулся с вопросами');
+      setCopyState(selectionStatusText);
     } catch (error) {
       setCopyState(error?.message || 'Не удалось проанализировать подборку');
     } finally {
