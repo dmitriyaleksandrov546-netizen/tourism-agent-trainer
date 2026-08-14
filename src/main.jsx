@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
+import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import {
   clearDialogHistory,
   createDialogRecord,
@@ -27,8 +28,11 @@ function App() {
   const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
+  const [isTravelMemoOpen, setIsTravelMemoOpen] = useState(false);
+  const [checkedTravelItems, setCheckedTravelItems] = useState({});
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
+  const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
@@ -40,6 +44,8 @@ function App() {
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
+    setIsTravelMemoOpen(false);
+    setCheckedTravelItems({});
   };
 
   const resetAttempt = () => {
@@ -51,6 +57,8 @@ function App() {
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
+    setIsTravelMemoOpen(false);
+    setCheckedTravelItems({});
   };
 
   const copyText = async (text, okText = 'Скопировано') => {
@@ -84,6 +92,12 @@ function App() {
       if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(history.records));
     });
   };
+
+  const toggleTravelItem = (id) => {
+    setCheckedTravelItems((current) => ({ ...current, [id]: !current[id] }));
+  };
+
+  const resetTravelChecklist = () => setCheckedTravelItems({});
 
   const clearHistory = () => {
     setDialogHistory(clearDialogHistory());
@@ -231,6 +245,7 @@ function App() {
               <div className="sectionHead">
                 <h2>2. Ответьте клиенту</h2>
                 <div className="headActions">
+                  <button className="ghost" onClick={() => setIsTravelMemoOpen(true)}>Памятка документов</button>
                   <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
                   <button className="ghost" onClick={resetAttempt}>Очистить</button>
                 </div>
@@ -280,6 +295,14 @@ function App() {
               <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
 
               {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
+              <TravelRequirementsDrawer
+                checklist={travelChecklist}
+                checkedItems={checkedTravelItems}
+                isOpen={isTravelMemoOpen}
+                onClose={() => setIsTravelMemoOpen(false)}
+                onToggle={toggleTravelItem}
+                onReset={resetTravelChecklist}
+              />
             </section>
           </section>
       </section>
@@ -300,6 +323,56 @@ function SelectionAnalysisCard({ analysis }) {
       <p><b>Проблема:</b> {analysis.gaps.join(' ') || 'Критичных разрывов нет.'}</p>
       <p><b>Что должен сделать менеджер:</b> {analysis.managerTask}</p>
     </section>
+  );
+}
+
+function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, onClose, onToggle, onReset }) {
+  if (!isOpen) return null;
+  const doneCount = checklist.checks.filter((item) => checkedItems[item.id]).length;
+
+  return (
+    <aside className="travelDrawer" aria-label="Памятка документов для менеджера">
+      <div className="travelDrawerHead">
+        <div>
+          <p className="kicker">Памятка перед оплатой</p>
+          <h2>{checklist.country} · документы и въезд</h2>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Закрыть памятку">×</button>
+      </div>
+
+      <p className="travelSummary">{checklist.summary}</p>
+      {checklist.clientContext && <p className="travelContext">Контекст клиента: {checklist.clientContext}</p>}
+      <p className="travelWarning">{checklist.warning}</p>
+
+      <section className="travelBlock">
+        <h3>Что уточнить у клиента</h3>
+        <ol>
+          {checklist.questions.map((question) => <li key={question}>{question}</li>)}
+        </ol>
+      </section>
+
+      <section className="travelBlock">
+        <div className="travelChecklistHead">
+          <h3>Чеклист менеджера</h3>
+          <span>{doneCount}/{checklist.checks.length}</span>
+        </div>
+        <div className="travelChecks">
+          {checklist.checks.map((item) => (
+            <label key={item.id} className={checkedItems[item.id] ? 'done' : ''}>
+              <input type="checkbox" checked={Boolean(checkedItems[item.id])} onChange={() => onToggle(item.id)} />
+              <span>{item.text}</span>
+            </label>
+          ))}
+        </div>
+        <button className="ghost resetMemo" type="button" onClick={onReset}>Сбросить отметки</button>
+      </section>
+
+      <section className="travelBlock sources">
+        <h3>Источники для свежей проверки</h3>
+        {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
+        <small>{checklist.sourcePolicy}</small>
+      </section>
+    </aside>
   );
 }
 
