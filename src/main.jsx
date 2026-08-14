@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, analyzeSelectionLink } from './simulatorEngine.js';
-import { filterTourvisionHotels, tourvisionHotels } from './tourvisionData.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import {
   clearDialogHistory,
@@ -23,13 +22,10 @@ function App() {
   const [selectionAnalysis, setSelectionAnalysis] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
-  const [activeView, setActiveView] = useState('trainer');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
-  const [tourvisionQuery, setTourvisionQuery] = useState('');
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
-  const filteredTourvisionHotels = useMemo(() => filterTourvisionHotels(tourvisionQuery), [tourvisionQuery]);
 
   const selectScenario = (id) => {
     setActiveScenarioId(id);
@@ -74,7 +70,6 @@ function App() {
     setMessages(record.messages || []);
     setDraft('');
     setLastEvaluation(record.score !== null ? { score: record.score, verdict: record.verdict, dimensions: [], topFixes: [] } : null);
-    setActiveView('trainer');
     setCopyState('Диалог открыт из истории');
   };
 
@@ -170,15 +165,12 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalEnter);
   }, [draft, isSending, activeScenarioId, messages]);
 
-  const isTrainer = activeView === 'trainer';
-
   return (
     <main className="appShell">
       <aside className="leftRail" aria-label="Главное меню">
         <button
-          className={isTrainer ? 'active' : ''}
+          className="active"
           type="button"
-          onClick={() => setActiveView('trainer')}
           title="Тренажёр"
           aria-label="Тренажёр"
         >
@@ -192,11 +184,10 @@ function App() {
             <p className="kicker">Тренажёр турагента</p>
             <h1>Ответьте клиенту. Получите короткий разбор.</h1>
           </div>
-          {isTrainer && lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
+          {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
         </header>
 
-        {isTrainer ? (
-          <section className="layout">
+        <section className="layout">
             <section className="card situations">
               <h2>Ситуации</h2>
               <div className="situationList">
@@ -255,14 +246,6 @@ function App() {
               {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
             </section>
           </section>
-        ) : (
-          <TourvisionPage
-            query={tourvisionQuery}
-            hotels={filteredTourvisionHotels}
-            total={tourvisionHotels.length}
-            onQueryChange={setTourvisionQuery}
-          />
-        )}
       </section>
     </main>
   );
@@ -280,47 +263,6 @@ function SelectionAnalysisCard({ analysis }) {
       <p><b>Исходные критерии:</b> {analysis.criteria.join(', ')}</p>
       <p><b>Проблема:</b> {analysis.gaps.join(' ') || 'Критичных разрывов нет.'}</p>
       <p><b>Что должен сделать менеджер:</b> {analysis.managerTask}</p>
-    </section>
-  );
-}
-
-function TourvisionPage({ query, hotels, total, onQueryChange }) {
-  return (
-    <section className="tourvisionPage">
-      <section className="card tourvisionPanel">
-        <div className="sectionHead tourvisionHead">
-          <div>
-            <h2>Турвижен</h2>
-            <p>Введите параметры: страна, курорт, формат отдыха, риск или уровень уверенности.</p>
-          </div>
-          <span>{hotels.length} из {total}</span>
-        </div>
-
-        <label className="tourvisionSearch">
-          <span>Параметры подбора</span>
-          <input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Например: Турция дети риск / Египет риф / Дубай депозит"
-          />
-        </label>
-
-        <div className="tourvisionResults">
-          {hotels.map((hotel) => (
-            <article key={hotel.name} className="hotelCard">
-              <div>
-                <small>{hotel.country} · {hotel.resort} · {hotel.segment}</small>
-                <h3>{hotel.name}</h3>
-              </div>
-              <p><b>Кому подходит:</b> {hotel.fit}</p>
-              <p><b>Кому не продавать:</b> {hotel.notFor}</p>
-              <p><b>Риск:</b> {hotel.risk}</p>
-              <footer>{hotel.source} · проверено: {hotel.checkedAt} · уверенность: {hotel.confidence}</footer>
-            </article>
-          ))}
-          {!hotels.length && <p className="emptyHistory">Ничего не найдено. Уберите часть параметров или проверьте формулировку.</p>}
-        </div>
-      </section>
     </section>
   );
 }
