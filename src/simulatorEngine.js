@@ -153,7 +153,11 @@ const conceptMap = {
   factSignalConclusion: { label: 'факт / отзыв / вывод', words: ['факт', 'отзывный сигнал', 'вывод', 'по отзывам', 'для вас значит'] },
   surpriseControl: { label: 'управление сюрпризами', words: ['сюрприз', 'стройк', 'депозит', 'гарантировать не буду', 'проверю', 'риски'] },
   depositConstruction: { label: 'депозит/стройка/пляж', words: ['депозит', 'стройк', 'пляж', 'дорогу', 'рядом'] },
-  noFalseGuarantee: { label: 'без ложных гарантий', words: ['не гарантир', 'гарантировать не буду', 'проверю', 'предупрежу'] }
+  noFalseGuarantee: { label: 'без ложных гарантий', words: ['не гарантир', 'гарантировать не буду', 'проверю', 'предупрежу'] },
+  selectionQuality: { label: 'качество подборки', words: ['подборк', 'отель', 'звезд', 'звёзд', 'страна', 'критери', 'удобств', 'пляж', 'питани', 'аквапарк', 'трансфер'] },
+  reviewSources: { label: 'отзывы и источники', words: ['яндекс', 'tripadvisor', 'трипадвайзер', 'отзыв', 'пишут', 'хвалят', 'ругают', 'источник'] },
+  compromiseExplanation: { label: 'объяснение компромисса', words: ['компромисс', 'зато', 'но', 'уступ', 'дешевле', 'дороже', 'важнее', 'замен'] },
+  managerDecision: { label: 'решение менеджера после реакции клиента', words: ['заменю', 'корректир', 'уточню', 'оставляем', 'меняем', 'добавлю', 'покажу разницу', 'следующий шаг'] }
 };
 
 const dangerousPromisePhrases = ['гарантирую', 'точно понравится', 'без проблем', 'идеально', '100%', 'лучший отель'];
@@ -204,6 +208,16 @@ const dimensionsConfig = [
   { key: 'structure', label: 'Структура ответа', max: 6, concepts: [] }
 ];
 
+const selectionReviewDimensionsConfig = [
+  { key: 'selectionQuality', label: 'Разбор качества подборки', max: 18, concepts: ['selectionQuality'] },
+  { key: 'reviewSources', label: 'Отзывы Яндекс / Tripadvisor', max: 16, concepts: ['reviewSources'] },
+  { key: 'compromiseExplanation', label: 'Объяснение компромисса', max: 16, concepts: ['compromiseExplanation'] },
+  { key: 'managerDecision', label: 'Решение менеджера', max: 16, concepts: ['managerDecision'] },
+  { key: 'riskHonesty', label: 'Риски и источники', max: 14, concepts: ['riskHonesty', 'sourceCheck', 'factSignalConclusion'] },
+  { key: 'nextStep', label: 'Следующий шаг', max: 12, concepts: ['nextStep'] },
+  { key: 'humanTone', label: 'Человеческий тон', max: 8, concepts: [] }
+];
+
 function buildDimension(text, config, scenario) {
   if (config.key === 'humanTone') {
     const ok = hasAny(text, ['понимаю', 'понял', 'давайте', 'по-честному', 'спокойно', 'коротко']);
@@ -226,7 +240,7 @@ function buildDimension(text, config, scenario) {
   };
 }
 
-function buildPenalties(text, scenario) {
+function buildPenalties(text, scenario, options = {}) {
   const penalties = [];
   if (isKeywordStuffing(text)) penalties.push({ key: 'keywordStuffing', points: 45, reason: 'слова есть, мышления нет', evidence: stuffingWords.filter((w) => text.includes(w)).slice(0, 6) });
   const dangerous = dangerousPromisePhrases.filter((phrase) => text.includes(phrase));
@@ -234,6 +248,7 @@ function buildPenalties(text, scenario) {
   const vague = vaguePhrases.filter((phrase) => text.includes(phrase));
   if (vague.length && !hasLogic(text)) penalties.push({ key: 'emptyAdvertising', points: 16, reason: 'пустая реклама без фактов и рисков', evidence: vague });
   if (scenario?.requiredConcepts?.includes('nextStep') && !hasConcreteNextStep(text)) penalties.push({ key: 'noNextStep', points: 14, reason: 'нет действия + срока/канала', evidence: [] });
+  if (options.phase === 'selection-review' && !hasAny(text, conceptMap.selectionQuality.words)) penalties.push({ key: 'noSelectionAnalysis', points: 18, reason: 'менеджер не разобрал качество подборки после ссылки', evidence: [] });
   if (!hasLogic(text) && sentenceCount(text) < 2) penalties.push({ key: 'noLogic', points: 10, reason: 'ответ не объясняет причинно-следственную логику', evidence: [] });
   return penalties;
 }
@@ -249,6 +264,7 @@ function buildCorpusSignals(dimensions, penalties) {
 
 function buildTopFixes(dimensions, penalties) {
   if (penalties.some((p) => p.key === 'keywordStuffing')) return ['Не набивай ответ словами. Напиши связку: что понял → где компромисс → что проверишь → когда вернёшься.'];
+  if (penalties.some((p) => p.key === 'noSelectionAnalysis')) return ['Сначала разбери качество подборки: страна, отель, звёзды, удобства и попадание в исходные критерии клиента.'];
   const fixes = [];
   for (const d of dimensions) {
     if (d.status === 'good') continue;
@@ -256,16 +272,77 @@ function buildTopFixes(dimensions, penalties) {
     if (d.key === 'hiddenPain') fixes.push('Назови скрытый страх клиента простыми словами.');
     if (d.key === 'budgetFork') fixes.push('Дай вилку: в бюджет с компромиссом / комфортнее дороже / альтернативная дата или отель.');
     if (d.key === 'riskHonesty') fixes.push('Проговори минусы и что именно проверишь по источникам/отзывам.');
+    if (d.key === 'selectionQuality') fixes.push('Сначала разбери качество подборки по фактам: страна, отель, звёзды, удобства и соответствие запросу.');
+    if (d.key === 'reviewSources') fixes.push('Добавь вывод по отзывам на Яндексе и Tripadvisor, а не только описание отеля.');
+    if (d.key === 'compromiseExplanation') fixes.push('Объясни компромисс: чего нет, почему это допустимо и что клиент получает взамен.');
+    if (d.key === 'managerDecision') fixes.push('Скажи, что менеджер делает дальше: меняет подборку, уточняет детали или ведёт к брони.');
     if (d.key === 'nextStep') fixes.push('Зафиксируй действие, срок и канал: например, “сегодня до 18:00 пришлю 3 варианта в WhatsApp”.');
   }
   return fixes.slice(0, 3);
 }
 
-export function evaluateAgentReply(text = '', scenarioArg = scenarios[0]) {
+export function analyzeSelectionLink(scenarioId = 'turkey-family-hard') {
+  const scenario = getScenarioById(scenarioId);
+  const hotelFindings = [
+    {
+      name: 'Side Family Resort 5*',
+      country: 'Турция',
+      stars: '5*',
+      fit: 'сильный детский блок, песчаный пляж',
+      risk: 'номера частично уставшие, в сезон очереди в ресторане',
+      compromise: 'проходит ближе к бюджету, но питание и номерной фонд слабее ожиданий',
+      yandexReviewSignal: 'хвалят пляж и детскую анимацию, ругают очереди в ресторане',
+      tripadvisorReviewSignal: 'отмечают уставшие номера, но семейный формат считают понятным',
+      confidence: 'средняя'
+    },
+    {
+      name: 'Belek Aqua Club 5*',
+      country: 'Турция',
+      stars: '5*',
+      fit: 'аквапарк, зелёная территория, питание выше среднего',
+      risk: 'обычно выше бюджета, надо ловить даты',
+      compromise: 'лучше закрывает запрос детей, но почти точно дороже 180 000 ₽',
+      yandexReviewSignal: 'часто хвалят питание и территорию',
+      tripadvisorReviewSignal: 'пишут, что детская инфраструктура сильнее среднего',
+      confidence: 'высокая'
+    },
+    {
+      name: 'Alanya Sun Beach 4+',
+      country: 'Турция',
+      stars: '4+',
+      fit: 'может пройти по бюджету',
+      risk: 'трансфер дольше, вход в море неидеален для 2 лет',
+      compromise: 'дешевле, но уступка по звёздам, трансферу и заходу в море для младшего ребёнка',
+      yandexReviewSignal: 'часть семей жалуется на долгий трансфер',
+      tripadvisorReviewSignal: 'пляж называют нормальным, но не идеальным для малышей',
+      confidence: 'средняя'
+    }
+  ];
+  const criteria = ['Турция', '5*', 'первая линия', 'песок', 'аквапарк', 'хорошее питание', 'детям 2 и 11 лет', scenario.clientProfile.budget];
+  const mismatchedHotels = hotelFindings.filter((hotel) => hotel.country !== 'Турция' || !hotel.stars.includes('5'));
+  const hasCompromises = hotelFindings.some((hotel) => /компромисс|дороже|дешевле|уступ|слабее|неидеален/i.test(`${hotel.risk} ${hotel.compromise}`));
+  const gaps = [];
+  if (hasCompromises || mismatchedHotels.length) gaps.push('Не все варианты честно закрывают исходные критерии клиента.');
+  const qualityScore = Math.max(35, 100 - gaps.length * 18 - mismatchedHotels.length * 8 - (hasCompromises ? 10 : 0));
+  const bestHotel = hotelFindings[0];
+  const compromiseHotel = hotelFindings.find((hotel) => hotel.name.includes('Alanya')) || bestHotel;
+  return {
+    phase: 'selection-review',
+    qualityScore,
+    criteria,
+    hotelFindings,
+    gaps,
+    clientReply: `Я посмотрела подборку по ссылке. По критериям ${criteria.join(', ')} вижу компромисс. ${bestHotel.name}: ${bestHotel.country}, ${bestHotel.stars}, сильная сторона — ${bestHotel.fit}, но по Яндекс отзывам ${bestHotel.yandexReviewSignal}, а на Tripadvisor ${bestHotel.tripadvisorReviewSignal}. ${compromiseHotel.name} выглядит как уступка: ${compromiseHotel.compromise}. Объясните, пожалуйста, почему это нормально для нас, или замените вариант, где слабее питание/детская часть/пляж.`,
+    managerTask: 'Разобрать качество подборки, отзывы, компромиссы и решить: корректировать подборку, уточнять детали или вести к брони.'
+  };
+}
+
+export function evaluateAgentReply(text = '', scenarioArg = scenarios[0], options = {}) {
   const scenario = typeof scenarioArg === 'string' ? getScenarioById(scenarioArg) : scenarioArg || scenarios[0];
   const normalized = normalize(text);
-  const dimensions = dimensionsConfig.map((config) => buildDimension(normalized, config, scenario));
-  const penalties = buildPenalties(normalized, scenario);
+  const dimensionConfig = options.phase === 'selection-review' ? selectionReviewDimensionsConfig : dimensionsConfig;
+  const dimensions = dimensionConfig.map((config) => buildDimension(normalized, config, scenario));
+  const penalties = buildPenalties(normalized, scenario, options);
   const penaltyPoints = penalties.reduce((sum, p) => sum + p.points, 0);
   const baseScore = dimensions.reduce((sum, d) => sum + d.earned, 0);
   const score = Math.max(0, Math.min(100, baseScore - penaltyPoints));

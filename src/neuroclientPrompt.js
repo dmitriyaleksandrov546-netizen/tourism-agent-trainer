@@ -1,4 +1,4 @@
-import { getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import { analyzeSelectionLink, getNextClientReply, getScenarioById } from './simulatorEngine.js';
 
 const abusePatterns = ['блять', 'бляд', 'сука', 'нахуй', 'хуй', 'пизд', 'еба', 'ёба', 'заеб', 'мудак', 'идиот'];
 
@@ -11,7 +11,16 @@ function countRudeAgentMessages(history = []) {
   return history.filter((message) => message.role === 'agent' && containsAbuse(message.text)).length;
 }
 
-export function createFallbackReply(scenarioId, agentText = '', turn = 1, history = []) {
+function createSelectionReviewFallback(scenarioId, selectionAnalysis = null) {
+  const analysis = selectionAnalysis || analyzeSelectionLink(scenarioId);
+  return `${analysis.clientReply} Мне нужен не просто новый список отелей, а понятный вывод: что оставляем, что меняем и почему. Если компромисс оправдан — объясните его коротко, если нет — лучше замените вариант.`;
+}
+
+export function createFallbackReply(scenarioId, agentText = '', turn = 1, history = [], options = {}) {
+  if (options.phase === 'selection-review') {
+    return { text: createSelectionReviewFallback(scenarioId, options.selectionAnalysis), source: 'local-fallback', risk: 'selection-review-needs-manager-decision' };
+  }
+
   if (containsAbuse(agentText)) {
     if (countRudeAgentMessages(history) > 0) {
       return {
@@ -35,8 +44,9 @@ export function createFallbackReply(scenarioId, agentText = '', turn = 1, histor
   };
 }
 
-export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, history = [] }) {
+export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, history = [], phase = 'dialogue', selectionAnalysis = null }) {
   const scenario = getScenarioById(scenarioId);
+  const analysis = selectionAnalysis || (phase === 'selection-review' ? analyzeSelectionLink(scenarioId) : null);
   const sourceRefs = scenario.sourceRefs
     .map((ref) => `- ${ref.sourceType}: ${ref.path}; confidence: ${ref.confidence}`)
     .join('\n');
@@ -55,6 +65,8 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       'Не требуй конкретные отели, отзывы и источники сразу после того, как агент пообещал их проверить и прислать. До истечения обещанного срока нормальный клиент ждёт.',
       'Повторно доёбываться можно только если по истории видно, что агент уже сорвал обещанный срок или прислал подборку без обещанных деталей.',
       'Если агент грубит или матерится — сразу ставь границу и прекращай нормальный тон.',
+      'Если этап selection-review: ты уже открыл(а) ссылку на подборку, сравнил(а) отели с исходным запросом, прочитал(а) отзывы на Яндексе и Tripadvisor и теперь ждёшь от менеджера вывод: что оставить, что заменить, какие компромиссы допустимы и какой следующий шаг.',
+      'На этапе selection-review оценивай не факт отправки ссылки, а качество подборки: страна, название отеля, звёзды, удобства, бюджет, отзывы и объяснение компромисса.',
       'Не выдумывай факты об отелях. Если факта нет — спрашивай, как агент это проверит.',
       'Пиши по-русски, разговорно, 1–3 коротких абзаца. Без списков, без оценки балла, без советов агенту.'
     ].join('\n'),
@@ -65,6 +77,7 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       `Скрытая настоящая потребность: ${scenario.clientProfile.hiddenNeed}`,
       `Триггер/страх: ${scenario.clientProfile.trigger}`,
       `Ход диалога: ${turn}`,
+      `Этап: ${phase}`,
       '',
       'Источники методики/корпуса:',
       sourceRefs,
@@ -72,6 +85,14 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       'История диалога:',
       conversation || '(пока только старт сценария)',
       '',
+      ...(analysis ? [
+        'Анализ подборки после ссылки:',
+        `Критерии клиента: ${analysis.criteria.join(', ')}`,
+        `Оценка качества подборки: ${analysis.qualityScore}/100`,
+        `Проблемы: ${analysis.gaps.join(' ') || 'критичных проблем нет'}`,
+        `Текущая реакция клиента: ${analysis.clientReply}`,
+        ''
+      ] : []),
       `Последний ответ турагента: ${agentText}`,
       '',
       'Ответь только как клиент. Не объясняй правила тренажёра.'

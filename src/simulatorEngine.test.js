@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { corpusInsights, evaluateAgentReply, getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import { corpusInsights, analyzeSelectionLink, evaluateAgentReply, getNextClientReply, getScenarioById } from './simulatorEngine.js';
 
 describe('simulatorEngine', () => {
   it('exposes corpus and methodic sources from calls, Wazzup and training materials', () => {
@@ -68,5 +68,29 @@ describe('simulatorEngine', () => {
     expect(reply).toContain('жду');
     expect(reply).not.toContain('А какие минусы');
     expect(reply).not.toContain('общими словами');
+  });
+
+  it('analyzes a sent hotel selection as a client using criteria, compromises and review sources', () => {
+    const analysis = analyzeSelectionLink('turkey-family-hard');
+
+    expect(analysis.clientReply).toContain('Яндекс');
+    expect(analysis.clientReply).toContain('Tripadvisor');
+    expect(analysis.clientReply).toContain('Side Family Resort 5*');
+    expect(analysis.clientReply).toMatch(/компромисс|уступ/i);
+    expect(analysis.qualityScore).toBeLessThan(100);
+    expect(analysis.gaps).toContain('Не все варианты честно закрывают исходные критерии клиента.');
+    expect(analysis.hotelFindings[0]).toMatchObject({ country: 'Турция', stars: '5*' });
+  });
+
+  it('scores manager follow-up after selection review, not the bare fact of sending a link', () => {
+    const weak = evaluateAgentReply('Вот ссылка на подборку, выбирайте.', 'turkey-family-hard', { phase: 'selection-review' });
+    const strong = evaluateAgentReply('Да, вижу компромисс: подборка по Турции и Side Family Resort 5* подходит по пляжу, питанию и детям, но по отзывам на Яндексе есть очереди в ресторане. Поэтому либо оставляем его как дешевле, либо я сегодня до 18:00 заменю на вариант с питанием сильнее и честно покажу разницу по цене.', 'turkey-family-hard', { phase: 'selection-review' });
+
+    expect(weak.score).toBeLessThan(45);
+    expect(weak.topFixes.join(' ')).toContain('разбери качество подборки');
+    expect(strong.score).toBeGreaterThan(weak.score);
+    expect(strong.detected).toContain('selectionQuality');
+    expect(strong.detected).toContain('reviewSources');
+    expect(strong.detected).toContain('managerDecision');
   });
 });

@@ -1,4 +1,4 @@
-import { getNextClientReply } from './simulatorEngine.js';
+import { createFallbackReply } from './neuroclientPrompt.js';
 
 const DEFAULT_NEUROCLIENT_API_URL = '/api/neuroclient';
 const REQUEST_TIMEOUT_MS = 30000;
@@ -7,7 +7,7 @@ function getNeuroclientApiUrl() {
   return import.meta.env.VITE_NEUROCLIENT_API_URL || DEFAULT_NEUROCLIENT_API_URL;
 }
 
-export async function requestNeuroclientReply({ scenarioId, agentText, turn, history }) {
+export async function requestNeuroclientReply({ scenarioId, agentText, turn, history, phase = 'dialogue', selectionAnalysis = null }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -16,7 +16,7 @@ export async function requestNeuroclientReply({ scenarioId, agentText, turn, his
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenarioId, agentText, turn, history })
+      body: JSON.stringify({ scenarioId, agentText, turn, history, phase, selectionAnalysis })
     });
 
     if (!response.ok) throw new Error(`API ${response.status}`);
@@ -24,8 +24,9 @@ export async function requestNeuroclientReply({ scenarioId, agentText, turn, his
     if (!data?.text) throw new Error('Empty neuroclient reply');
     return data;
   } catch (error) {
+    const fallback = createFallbackReply(scenarioId, agentText, turn, history, { phase, selectionAnalysis });
     return {
-      text: getNextClientReply(scenarioId, agentText, turn, history),
+      ...fallback,
       source: 'client-local-fallback',
       error: error?.message || 'Neuroclient backend unavailable'
     };
