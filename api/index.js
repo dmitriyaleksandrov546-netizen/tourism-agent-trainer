@@ -99,26 +99,26 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { ok: false, error: 'invalid json' }, headers);
   }
 
-  const { scenarioId, agentText, turn, history } = body || {};
+  const { scenarioId, agentText, turn, history, phase = 'dialogue', selectionAnalysis = null } = body || {};
   if (!scenarioId || typeof agentText !== 'string') {
     return sendJson(res, 400, { error: 'scenarioId and agentText are required' }, headers);
   }
 
   if (containsAbuse(agentText)) {
-    return sendJson(res, 200, createFallbackReply(scenarioId, agentText, turn, history), headers);
+    return sendJson(res, 200, createFallbackReply(scenarioId, agentText, turn, history, { phase, selectionAnalysis }), headers);
   }
 
   const llmConfig = getLlmConfig();
   if (!llmConfig.configured) {
-    return sendJson(res, 200, createFallbackReply(scenarioId, agentText, turn, history), headers);
+    return sendJson(res, 200, createFallbackReply(scenarioId, agentText, turn, history, { phase, selectionAnalysis }), headers);
   }
 
   try {
-    const prompt = buildNeuroclientPrompt({ scenarioId, agentText, turn, history });
+    const prompt = buildNeuroclientPrompt({ scenarioId, agentText, turn, history, phase, selectionAnalysis });
     const text = await callConfiguredLlm(prompt);
     return sendJson(res, 200, { text: normalizeClientReply(text), source: llmConfig.provider }, headers);
   } catch (error) {
     console.error('[neuroclient-api]', error?.message || error);
-    return sendJson(res, 200, { ...createFallbackReply(scenarioId, agentText, turn, history), source: 'fallback-after-llm-error' }, headers);
+    return sendJson(res, 200, { ...createFallbackReply(scenarioId, agentText, turn, history, { phase, selectionAnalysis }), source: 'fallback-after-llm-error' }, headers);
   }
 }

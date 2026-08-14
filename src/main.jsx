@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, analyzeSelectionLink } from './simulatorEngine.js';
 import { filterTourvisionHotels, tourvisionHotels } from './tourvisionData.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import {
@@ -19,6 +19,8 @@ function App() {
   const [messages, setMessages] = useState(() => createInitialMessages('turkey-family-hard'));
   const [draft, setDraft] = useState('');
   const [lastEvaluation, setLastEvaluation] = useState(null);
+  const [activePhase, setActivePhase] = useState('dialogue');
+  const [selectionAnalysis, setSelectionAnalysis] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
   const [activeView, setActiveView] = useState('trainer');
@@ -34,6 +36,8 @@ function App() {
     setMessages(createInitialMessages(id, Date.now()));
     setDraft('');
     setLastEvaluation(null);
+    setSelectionAnalysis(null);
+    setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
   };
@@ -42,6 +46,8 @@ function App() {
     setMessages(createInitialMessages(activeScenarioId, Date.now()));
     setDraft('');
     setLastEvaluation(null);
+    setSelectionAnalysis(null);
+    setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
   };
@@ -84,11 +90,25 @@ function App() {
     setCopyState('История очищена');
   };
 
+  const simulateSelectionReview = () => {
+    const analysis = analyzeSelectionLink(activeScenarioId);
+    setSelectionAnalysis(analysis);
+    setActivePhase('selection-review');
+    setMessages((current) => [
+      ...current,
+      { id: `agent-selection-${Date.now()}`, role: 'agent', text: 'Я отправил(а) вам ссылку на подборку. Посмотрите, пожалуйста, отели, отзывы и где для вас есть сомнения.', time: 'ссылка на подборку' },
+      { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: 'клиент изучил подборку' }
+    ]);
+    setLastEvaluation(null);
+    setDraft('');
+    setCopyState('Клиент изучил подборку и вернулся с вопросами');
+  };
+
   const sendReply = async () => {
     const text = draft.trim();
     if (!text || isSending) return;
 
-    const evaluation = evaluateAgentReply(text, activeScenario);
+    const evaluation = evaluateAgentReply(text, activeScenario, { phase: activePhase });
     const turn = messages.filter((m) => m.role === 'agent').length + 1;
     const thinkingId = `client-thinking-${Date.now()}`;
     const nextMessages = [
@@ -102,7 +122,7 @@ function App() {
     setDraft('');
     setIsSending(true);
 
-    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages });
+    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages, phase: activePhase, selectionAnalysis });
     const finalMessages = nextMessages.map((message) => (
       message.id === thinkingId
         ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
@@ -164,22 +184,13 @@ function App() {
         >
           <span>ТР</span>
         </button>
-        <button
-          className={activeView === 'tourvision' ? 'active' : ''}
-          type="button"
-          onClick={() => setActiveView('tourvision')}
-          title="Турвижен"
-          aria-label="Турвижен"
-        >
-          <span>TV</span>
-        </button>
       </aside>
 
       <section className="appContent">
         <header className="top">
           <div>
-            <p className="kicker">{isTrainer ? 'Тренажёр турагента' : 'Турвижен'}</p>
-            <h1>{isTrainer ? 'Ответьте клиенту. Получите короткий разбор.' : 'Подбор отелей по параметрам клиента.'}</h1>
+            <p className="kicker">Тренажёр турагента</p>
+            <h1>Ответьте клиенту. Получите короткий разбор.</h1>
           </div>
           {isTrainer && lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
         </header>
@@ -208,6 +219,7 @@ function App() {
                 </div>
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
+              {activePhase === 'selection-review' && <SelectionAnalysisCard analysis={selectionAnalysis} />}
 
               <div className="dialogWindow" aria-label="Диалог с клиентом">
                 {messages.map((message) => (
@@ -217,6 +229,10 @@ function App() {
                     <small>{message.time}</small>
                   </article>
                 ))}
+              </div>
+
+              <div className="quickActions">
+                <button type="button" onClick={simulateSelectionReview}>+ Отправил подборку</button>
               </div>
 
               <label className="answerBox">
@@ -249,6 +265,22 @@ function App() {
         )}
       </section>
     </main>
+  );
+}
+
+function SelectionAnalysisCard({ analysis }) {
+  if (!analysis) return null;
+  return (
+    <section className="selectionCard">
+      <div>
+        <p className="kicker">Этап после ссылки</p>
+        <h3>Клиент изучил подборку · качество {analysis.qualityScore}/100</h3>
+      </div>
+      <p><b>Что проверил клиент:</b> страна, отели, звёзды, удобства, бюджет, компромиссы, Яндекс и Tripadvisor.</p>
+      <p><b>Исходные критерии:</b> {analysis.criteria.join(', ')}</p>
+      <p><b>Проблема:</b> {analysis.gaps.join(' ') || 'Критичных разрывов нет.'}</p>
+      <p><b>Что должен сделать менеджер:</b> {analysis.managerTask}</p>
+    </section>
   );
 }
 
