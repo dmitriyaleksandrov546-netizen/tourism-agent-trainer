@@ -102,6 +102,27 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
 .reviewBlock p { margin: 0; line-height: 1.42; color: #2f4039; }
 .example { padding: 14px; border-radius: 16px; background: rgba(255,255,255,.7); border: 1px solid var(--line); }
 
+.travelDrawer { position: fixed; top: 18px; right: 18px; bottom: 18px; width: min(460px, calc(100vw - 36px)); z-index: 9; overflow: auto; padding: 18px; border-radius: 24px; border: 1px solid var(--line); background: #fff; box-shadow: 0 28px 80px rgba(13, 36, 29, .22); display: grid; align-content: start; gap: 14px; }
+.travelDrawerHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.travelDrawerHead h2 { margin-bottom: 0; }
+.travelDrawerHead button { width: 38px; height: 38px; flex: 0 0 38px; border: 1px solid var(--line); border-radius: 13px; background: #f8faf8; color: var(--ink); font-size: 24px; line-height: 1; }
+.travelSummary, .travelContext, .travelWarning { margin: 0; line-height: 1.42; }
+.travelSummary { color: #2f4039; }
+.travelContext { padding: 10px 12px; border-radius: 14px; background: #eef8f2; color: var(--green-dark); font-weight: 850; font-size: 13px; }
+.travelWarning { padding: 12px; border-radius: 14px; background: #fff5f3; color: #7a2c20; border: 1px solid rgba(199,70,53,.2); font-size: 13px; font-weight: 800; }
+.travelBlock { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fbfcfb; }
+.travelBlock h3 { margin: 0; font-size: 16px; }
+.travelBlock ol { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: #33443d; line-height: 1.35; }
+.travelChecklistHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.travelChecklistHead span { border-radius: 999px; padding: 6px 10px; background: #e6f7ef; color: var(--green-dark); font-size: 12px; font-weight: 950; }
+.travelChecks { display: grid; gap: 8px; }
+.travelChecks label { display: grid; grid-template-columns: 22px 1fr; gap: 9px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: #2f4039; line-height: 1.35; }
+.travelChecks label.done { background: #effaf4; border-color: rgba(11,132,99,.26); color: var(--green-dark); }
+.travelChecks input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--green); }
+.resetMemo { justify-self: start; }
+.sources p { margin: 0; color: #33443d; line-height: 1.35; }
+.sources small { color: var(--muted); line-height: 1.35; }
+
 .tourvisionPage { display: grid; gap: 18px; }
 .tourvisionPanel { padding: 0; overflow: hidden; }
 .tourvisionHead { align-items: flex-start; }
