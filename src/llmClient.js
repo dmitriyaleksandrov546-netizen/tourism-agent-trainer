@@ -71,7 +71,7 @@ export async function callConfiguredLlm(prompt, env = process.env) {
       body: JSON.stringify({
         model: config.model,
         temperature: Number(readEnv(env, 'LLM_TEMPERATURE') || 0.82),
-        max_tokens: Number(readEnv(env, 'LLM_MAX_TOKENS') || 260),
+        max_tokens: Number(prompt.maxTokens || readEnv(env, 'LLM_MAX_TOKENS') || 260),
         messages: [
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user }

@@ -21,6 +21,7 @@ export function buildSelectionAnalysisPrompt({ scenarioId = 'turkey-family-hard'
     .join('\n\n');
 
   return {
+    maxTokens: 900,
     system: [
       'Ты играешь роль реального туриста/клиента в тренажёре турагента.',
       'Ты анализируешь реальную подборку, которую прислал менеджер: ссылку, текст, названия отелей и доступный текст страницы.',
