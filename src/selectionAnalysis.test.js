@@ -15,6 +15,7 @@ describe('selectionAnalysis', () => {
     });
 
     expect(prompt.system).toContain('анализируешь реальную подборку');
+    expect(prompt.maxTokens).toBeGreaterThanOrEqual(700);
     expect(prompt.system).toContain('не выдумывай');
     expect(prompt.user).toContain('https://example.com/selection');
     expect(prompt.user).toContain('Side Family Resort 5*');
