@@ -150,7 +150,7 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { ok: true, analysis, fetchError, source: llmConfig.provider }, headers);
     } catch (error) {
       console.error('[selection-analysis-api]', error?.message || error);
-      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError: fetchError || error?.message }), fetchError: fetchError || error?.message, source: 'fallback-after-analysis-error' }, headers);
+      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError: fetchError || error?.message }), fetchError, source: 'fallback-after-analysis-error' }, headers);
     }
   }
 

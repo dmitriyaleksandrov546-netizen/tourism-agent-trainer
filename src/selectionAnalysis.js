@@ -62,7 +62,7 @@ export function createSelectionAnalysisFallback({ scenarioId = 'turkey-family-ha
   const scenario = getScenarioById(scenarioId);
   const input = normalizeSelectionInput(selectionInput);
   const looksLikeUrlOnly = isSelectionUrl(input) && input.split(/\s+/).length <= 2;
-  if (looksLikeUrlOnly || fetchError) {
+  if (looksLikeUrlOnly && fetchError) {
     return normalizeSelectionAnalysis({
       qualityScore: 35,
       criteria: [scenario.clientProfile.budget, scenario.clientProfile.hiddenNeed],
