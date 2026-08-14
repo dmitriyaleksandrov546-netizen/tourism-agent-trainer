@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, analyzeSelectionLink } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
+import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
 import {
   clearDialogHistory,
   createDialogRecord,
@@ -20,6 +21,8 @@ function App() {
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [activePhase, setActivePhase] = useState('dialogue');
   const [selectionAnalysis, setSelectionAnalysis] = useState(null);
+  const [selectionInput, setSelectionInput] = useState('');
+  const [isAnalyzingSelection, setIsAnalyzingSelection] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
@@ -33,6 +36,7 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setSelectionAnalysis(null);
+    setSelectionInput('');
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
@@ -43,6 +47,7 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setSelectionAnalysis(null);
+    setSelectionInput('');
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
@@ -85,18 +90,33 @@ function App() {
     setCopyState('История очищена');
   };
 
-  const simulateSelectionReview = () => {
-    const analysis = analyzeSelectionLink(activeScenarioId);
-    setSelectionAnalysis(analysis);
-    setActivePhase('selection-review');
-    setMessages((current) => [
-      ...current,
-      { id: `agent-selection-${Date.now()}`, role: 'agent', text: 'Я отправил(а) вам ссылку на подборку. Посмотрите, пожалуйста, отели, отзывы и где для вас есть сомнения.', time: 'ссылка на подборку' },
-      { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: 'клиент изучил подборку' }
-    ]);
-    setLastEvaluation(null);
-    setDraft('');
-    setCopyState('Клиент изучил подборку и вернулся с вопросами');
+  const analyzeRealSelection = async () => {
+    const input = selectionInput.trim();
+    if (!input || isAnalyzingSelection) {
+      setCopyState('Сначала вставьте ссылку или текст подборки. Без этого анализ будет имитацией.');
+      return;
+    }
+
+    setIsAnalyzingSelection(true);
+    setCopyState('Открываю и анализирую реальную подборку...');
+    try {
+      const result = await requestSelectionAnalysis({ scenarioId: activeScenarioId, selectionInput: input });
+      const analysis = result.analysis;
+      setSelectionAnalysis(analysis);
+      setActivePhase('selection-review');
+      setMessages((current) => [
+        ...current,
+        { id: `agent-selection-${Date.now()}`, role: 'agent', text: `Я отправил(а) подборку: ${input}`, time: 'подборка от менеджера' },
+        { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: analysis.source === 'live-selection-analysis' ? 'клиент изучил реальную подборку' : 'клиент не смог полноценно проверить' }
+      ]);
+      setLastEvaluation(null);
+      setDraft('');
+      setCopyState(result.fetchError ? 'Ссылка не открылась полностью — клиент попросил доступный текст/скрин.' : 'Клиент изучил реальную подборку и вернулся с вопросами');
+    } catch (error) {
+      setCopyState(error?.message || 'Не удалось проанализировать подборку');
+    } finally {
+      setIsAnalyzingSelection(false);
+    }
   };
 
   const sendReply = async () => {
@@ -222,8 +242,18 @@ function App() {
                 ))}
               </div>
 
-              <div className="quickActions">
-                <button type="button" onClick={simulateSelectionReview}>+ Отправил подборку</button>
+              <div className="selectionInputBox">
+                <label>
+                  <span>Подборка менеджера для анализа</span>
+                  <textarea
+                    value={selectionInput}
+                    onChange={(event) => setSelectionInput(event.target.value)}
+                    placeholder="Вставьте реальную ссылку на подборку или текст/названия отелей. Без этого клиент не будет имитировать анализ."
+                  />
+                </label>
+                <button type="button" onClick={analyzeRealSelection} disabled={isAnalyzingSelection}>
+                  {isAnalyzingSelection ? 'Анализирую...' : 'Проанализировать подборку'}
+                </button>
               </div>
 
               <label className="answerBox">

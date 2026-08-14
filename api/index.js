@@ -1,5 +1,6 @@
 import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from '../src/llmClient.js';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from '../src/neuroclientPrompt.js';
+import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, isSelectionUrl, normalizeSelectionAnalysis, normalizeSelectionInput } from '../src/selectionAnalysis.js';
 import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs } from '../src/dialogLogStore.server.js';
 
 function sendJson(res, status, payload, extraHeaders = {}) {
@@ -36,6 +37,38 @@ async function readJsonBody(req) {
   for await (const chunk of req) chunks.push(chunk);
   const raw = Buffer.concat(chunks).toString('utf8');
   return raw ? JSON.parse(raw) : {};
+}
+
+function parseModelJson(text = '') {
+  const cleaned = String(text).trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : cleaned);
+}
+
+async function fetchSelectionText(selectionInput = '') {
+  if (!isSelectionUrl(selectionInput)) return { fetchedText: '', fetchError: '' };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(selectionInput, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'T-TRAINER selection analyzer' }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 12000);
+    return { fetchedText: text, fetchError: '' };
+  } catch (error) {
+    return { fetchedText: '', fetchError: error?.message || 'failed to open selection link' };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export default async function handler(req, res) {
@@ -85,6 +118,39 @@ export default async function handler(req, res) {
         const notConfigured = error?.code === 'SUPABASE_NOT_CONFIGURED';
         return sendJson(res, notConfigured ? 200 : 500, { ok: false, configured: false, error: error?.message || 'failed to delete dialog log' }, headers);
       }
+    }
+  }
+
+  if (req.method === 'POST' && path.endsWith('/api/selection-analysis')) {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (_error) {
+      return sendJson(res, 400, { ok: false, error: 'invalid json' }, headers);
+    }
+
+    const { scenarioId = 'turkey-family-hard', selectionInput = '' } = body || {};
+    let normalizedInput;
+    try {
+      normalizedInput = normalizeSelectionInput(selectionInput);
+    } catch (error) {
+      return sendJson(res, 400, { ok: false, error: error?.message || 'selection content is required' }, headers);
+    }
+
+    const { fetchedText, fetchError } = await fetchSelectionText(normalizedInput);
+    const llmConfig = getLlmConfig();
+    if (!llmConfig.configured) {
+      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError }), fetchError }, headers);
+    }
+
+    try {
+      const prompt = buildSelectionAnalysisPrompt({ scenarioId, selectionInput: normalizedInput, fetchedText, fetchError });
+      const raw = await callConfiguredLlm(prompt);
+      const analysis = normalizeSelectionAnalysis(parseModelJson(raw));
+      return sendJson(res, 200, { ok: true, analysis, fetchError, source: llmConfig.provider }, headers);
+    } catch (error) {
+      console.error('[selection-analysis-api]', error?.message || error);
+      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError: fetchError || error?.message }), fetchError: fetchError || error?.message, source: 'fallback-after-analysis-error' }, headers);
     }
   }
 

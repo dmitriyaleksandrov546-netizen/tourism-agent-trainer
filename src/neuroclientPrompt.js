@@ -1,4 +1,4 @@
-import { analyzeSelectionLink, getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import { getNextClientReply, getScenarioById } from './simulatorEngine.js';
 
 const abusePatterns = ['блять', 'бляд', 'сука', 'нахуй', 'хуй', 'пизд', 'еба', 'ёба', 'заеб', 'мудак', 'идиот'];
 
@@ -11,9 +11,11 @@ function countRudeAgentMessages(history = []) {
   return history.filter((message) => message.role === 'agent' && containsAbuse(message.text)).length;
 }
 
-function createSelectionReviewFallback(scenarioId, selectionAnalysis = null) {
-  const analysis = selectionAnalysis || analyzeSelectionLink(scenarioId);
-  return `${analysis.clientReply} Мне нужен не просто новый список отелей, а понятный вывод: что оставляем, что меняем и почему. Если компромисс оправдан — объясните его коротко, если нет — лучше замените вариант.`;
+function createSelectionReviewFallback(_scenarioId, selectionAnalysis = null) {
+  if (!selectionAnalysis?.clientReply) {
+    return 'Я пока не видела саму подборку. Пришлите ссылку, текст или названия отелей — без этого я не могу честно оценить страну, звёзды, удобства, отзывы и компромиссы.';
+  }
+  return `${selectionAnalysis.clientReply} Мне нужен не просто новый список отелей, а понятный вывод: что оставляем, что меняем и почему. Если компромисс оправдан — объясните его коротко, если нет — лучше замените вариант.`;
 }
 
 export function createFallbackReply(scenarioId, agentText = '', turn = 1, history = [], options = {}) {
@@ -46,7 +48,7 @@ export function createFallbackReply(scenarioId, agentText = '', turn = 1, histor
 
 export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, history = [], phase = 'dialogue', selectionAnalysis = null }) {
   const scenario = getScenarioById(scenarioId);
-  const analysis = selectionAnalysis || (phase === 'selection-review' ? analyzeSelectionLink(scenarioId) : null);
+  const analysis = selectionAnalysis || null;
   const sourceRefs = scenario.sourceRefs
     .map((ref) => `- ${ref.sourceType}: ${ref.path}; confidence: ${ref.confidence}`)
     .join('\n');
