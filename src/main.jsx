@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
+import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import {
   clearDialogHistory,
@@ -22,8 +23,6 @@ function App() {
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [activePhase, setActivePhase] = useState('dialogue');
   const [selectionAnalysis, setSelectionAnalysis] = useState(null);
-  const [selectionInput, setSelectionInput] = useState('');
-  const [isAnalyzingSelection, setIsAnalyzingSelection] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
@@ -40,7 +39,6 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setSelectionAnalysis(null);
-    setSelectionInput('');
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
@@ -53,7 +51,6 @@ function App() {
     setDraft('');
     setLastEvaluation(null);
     setSelectionAnalysis(null);
-    setSelectionInput('');
     setActivePhase('dialogue');
     setIsSending(false);
     setCopyState('');
@@ -104,66 +101,7 @@ function App() {
     setCopyState('История очищена');
   };
 
-  const analyzeRealSelection = async () => {
-    const input = selectionInput.trim();
-    if (!input || isAnalyzingSelection) {
-      setCopyState('Сначала вставьте ссылку или текст подборки. Без этого анализ будет имитацией.');
-      return;
-    }
-
-    setIsAnalyzingSelection(true);
-    setCopyState('Открываю и анализирую реальную подборку...');
-    try {
-      const result = await requestSelectionAnalysis({ scenarioId: activeScenarioId, selectionInput: input });
-      const analysis = result.analysis;
-      const selectionWasAccessible = !result.fetchError;
-      const clientSelectionTime = selectionWasAccessible ? 'клиент изучил подборку' : 'клиент не смог открыть ссылку';
-      const selectionStatusText = selectionWasAccessible
-        ? 'Клиент изучил реальную подборку и вернулся с вопросами'
-        : 'Ссылка не открылась полностью — клиент попросил доступный текст/скрин.';
-
-      setSelectionAnalysis(analysis);
-      setActivePhase('selection-review');
-      setMessages((current) => [
-        ...current,
-        { id: `agent-selection-${Date.now()}`, role: 'agent', text: `Я отправил(а) подборку: ${input}`, time: 'подборка от менеджера' },
-        { id: `client-selection-${Date.now()}`, role: 'client', text: analysis.clientReply, time: clientSelectionTime }
-      ]);
-      setLastEvaluation(null);
-      setDraft('');
-      setCopyState(selectionStatusText);
-    } catch (error) {
-      setCopyState(error?.message || 'Не удалось проанализировать подборку');
-    } finally {
-      setIsAnalyzingSelection(false);
-    }
-  };
-
-  const sendReply = async () => {
-    const text = draft.trim();
-    if (!text || isSending) return;
-
-    const evaluation = evaluateAgentReply(text, activeScenario, { phase: activePhase });
-    const turn = messages.filter((m) => m.role === 'agent').length + 1;
-    const thinkingId = `client-thinking-${Date.now()}`;
-    const nextMessages = [
-      ...messages,
-      { id: `agent-${messages.length}`, role: 'agent', text, time: 'ваш ответ' },
-      { id: thinkingId, role: 'client', text: '...', time: 'клиент думает' }
-    ];
-
-    setMessages(nextMessages);
-    setLastEvaluation(evaluation);
-    setDraft('');
-    setIsSending(true);
-
-    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages, phase: activePhase, selectionAnalysis });
-    const finalMessages = nextMessages.map((message) => (
-      message.id === thinkingId
-        ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
-        : message
-    ));
-    setMessages(finalMessages);
+  const persistDialog = (finalMessages, evaluation = null) => {
     const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation });
     setDialogHistory(upsertDialogRecord(record));
     saveServerDialogRecord(record).then((result) => {
@@ -174,6 +112,66 @@ function App() {
         });
       }
     });
+  };
+
+  const sendReply = async () => {
+    const text = draft.trim();
+    if (!text || isSending) return;
+
+    const isSelectionMessage = shouldAnalyzeSelectionFromMessage(text);
+    const evaluation = isSelectionMessage ? null : evaluateAgentReply(text, activeScenario, { phase: activePhase });
+    const turn = messages.filter((m) => m.role === 'agent').length + 1;
+    const thinkingId = `client-thinking-${Date.now()}`;
+    const nextMessages = [
+      ...messages,
+      { id: `agent-${messages.length}`, role: 'agent', text, time: isSelectionMessage ? 'подборка от менеджера' : 'ваш ответ' },
+      { id: thinkingId, role: 'client', text: isSelectionMessage ? 'Изучаю подборку...' : '...', time: isSelectionMessage ? 'клиент изучает' : 'клиент думает' }
+    ];
+
+    setMessages(nextMessages);
+    setLastEvaluation(evaluation);
+    setDraft('');
+    setIsSending(true);
+
+    if (isSelectionMessage) {
+      setCopyState('Клиент изучает подборку прямо в диалоге...');
+      try {
+        const result = await requestSelectionAnalysis({ scenarioId: activeScenarioId, selectionInput: text });
+        const analysis = result.analysis;
+        const selectionWasAccessible = !result.fetchError;
+        const finalMessages = nextMessages.map((message) => (
+          message.id === thinkingId
+            ? { ...message, text: analysis.clientReply, time: selectionWasAccessible ? 'клиент изучил подборку' : 'клиент не смог открыть ссылку' }
+            : message
+        ));
+        setSelectionAnalysis(analysis);
+        setActivePhase('selection-review');
+        setMessages(finalMessages);
+        setCopyState(selectionWasAccessible ? 'Подборка разобрана в диалоге' : 'Ссылка не открылась — клиент попросил доступный текст/скрин.');
+        persistDialog(finalMessages, null);
+      } catch (error) {
+        const finalMessages = nextMessages.map((message) => (
+          message.id === thinkingId
+            ? { ...message, text: 'Я не смогла открыть или прочитать подборку. Пришлите текст, скрин или названия отелей — тогда смогу оценить нормально.', time: 'ошибка анализа' }
+            : message
+        ));
+        setMessages(finalMessages);
+        setCopyState('Не удалось открыть подборку автоматически — клиент попросил текст, скрин или названия отелей.');
+        persistDialog(finalMessages, null);
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
+
+    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages, phase: activePhase, selectionAnalysis });
+    const finalMessages = nextMessages.map((message) => (
+      message.id === thinkingId
+        ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
+        : message
+    ));
+    setMessages(finalMessages);
+    persistDialog(finalMessages, evaluation);
     setIsSending(false);
   };
 
@@ -251,7 +249,6 @@ function App() {
                 </div>
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
-              {activePhase === 'selection-review' && <SelectionAnalysisCard analysis={selectionAnalysis} />}
 
               <div className="dialogWindow" aria-label="Диалог с клиентом">
                 {messages.map((message) => (
@@ -263,26 +260,11 @@ function App() {
                 ))}
               </div>
 
-              <div className="selectionInputBox">
-                <label>
-                  <span>Подборка менеджера для анализа</span>
-                  <textarea
-                    value={selectionInput}
-                    onChange={(event) => setSelectionInput(event.target.value)}
-                    placeholder="Вставьте реальную ссылку на подборку или текст/названия отелей. Без этого клиент не будет имитировать анализ."
-                  />
-                </label>
-                <button type="button" onClick={analyzeRealSelection} disabled={isAnalyzingSelection}>
-                  {isAnalyzingSelection ? 'Анализирую...' : 'Проанализировать подборку'}
-                </button>
-              </div>
-
-              <label className="answerBox">
-                <span>Напишите ответ как в WhatsApp.</span>
+              <label className="answerBox" aria-label="Сообщение менеджера">
                 <textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Напишите как клиенту в WhatsApp. Enter — отправить, Shift+Enter — новая строка."
+                  placeholder="Сообщение клиенту. Можно вставить ссылку или текст подборки — клиент разберёт её прямо в диалоге."
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
                       event.preventDefault();
@@ -292,7 +274,7 @@ function App() {
                 />
               </label>
 
-              <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Клиент думает...' : 'Проверить'}</button>
+              <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Отправляю...' : 'Отправить'}</button>
 
               {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
               <TravelRequirementsDrawer
@@ -307,22 +289,6 @@ function App() {
           </section>
       </section>
     </main>
-  );
-}
-
-function SelectionAnalysisCard({ analysis }) {
-  if (!analysis) return null;
-  return (
-    <section className="selectionCard">
-      <div>
-        <p className="kicker">Этап после ссылки</p>
-        <h3>Клиент изучил подборку · качество {analysis.qualityScore}/100</h3>
-      </div>
-      <p><b>Что проверил клиент:</b> страна, отели, звёзды, удобства, бюджет, компромиссы, Яндекс и Tripadvisor.</p>
-      <p><b>Исходные критерии:</b> {analysis.criteria.join(', ')}</p>
-      <p><b>Проблема:</b> {analysis.gaps.join(' ') || 'Критичных разрывов нет.'}</p>
-      <p><b>Что должен сделать менеджер:</b> {analysis.managerTask}</p>
-    </section>
   );
 }
 
@@ -368,6 +334,10 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, onClose, on
       </section>
 
       <section className="travelBlock sources">
+        <h3>Ежедневный контроль источников</h3>
+        <p>• Периодичность: каждый день</p>
+        <p>• Что сверяем: {checklist.dailyMonitoring.scope}</p>
+        <p>• Что получает менеджер: {checklist.dailyMonitoring.managerOutcome}</p>
         <h3>Источники для свежей проверки</h3>
         {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
         <small>{checklist.sourcePolicy}</small>

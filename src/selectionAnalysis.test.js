@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, normalizeSelectionInput } from './selectionAnalysis.js';
+import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, normalizeSelectionInput, shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 
 describe('selectionAnalysis', () => {
   it('rejects empty selection input instead of inventing a fake hotel review', () => {
@@ -46,5 +46,12 @@ describe('selectionAnalysis', () => {
     expect(fallback.clientReply).toContain('Я вижу подборку');
     expect(fallback.clientReply).not.toContain('не смогла открыть');
     expect(fallback.gaps.join(' ')).not.toContain('ссылка недоступна');
+  });
+
+  it('detects a manager selection inside the normal chat message without a separate analysis block', () => {
+    expect(shouldAnalyzeSelectionFromMessage('Вот подборка: https://example.com/tour подборка по Турции')).toBe(true);
+    expect(shouldAnalyzeSelectionFromMessage('Отель Seven Seas Hotel Life 5*, Кемер, 310 000 ₽, отзывы 4.6/5')).toBe(true);
+    expect(shouldAnalyzeSelectionFromMessage('Сегодня до 18:00 пришлю 3 варианта с отзывами и плюсами')).toBe(false);
+    expect(shouldAnalyzeSelectionFromMessage('Понимаю, уточню даты и бюджет')).toBe(false);
   });
 });
