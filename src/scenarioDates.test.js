@@ -1,31 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { scenarios } from './simulatorEngine.js';
 
-const REALITY_DATE = new Date('2026-08-17T00:00:00.000Z');
+const REALITY_DATE = '2026-08-17';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-describe('scenario trip dates', () => {
-  it('gives every scenario its own invented trip dates for seasonal hotel selection training', () => {
-    const starts = scenarios.map((scenario) => scenario.tripDates?.start);
+describe('scenario simulated current dates', () => {
+  it('gives every scenario its own invented current dialogue date', () => {
+    const dates = scenarios.map((scenario) => scenario.simulatedToday?.iso);
 
-    expect(starts).toHaveLength(scenarios.length);
-    expect(new Set(starts).size).toBe(scenarios.length);
+    expect(dates).toHaveLength(scenarios.length);
+    expect(new Set(dates).size).toBe(scenarios.length);
 
     for (const scenario of scenarios) {
-      expect(scenario.tripDates).toMatchObject({ start: expect.any(String), end: expect.any(String), label: expect.any(String), priceSeason: expect.any(String), selectionTrainingFocus: expect.any(String) });
-      expect(scenario.tripDates.start).not.toBe('2026-08-17');
-      expect(scenario.tripDates.end).not.toBe('2026-08-17');
-      expect(new Date(scenario.tripDates.end).getTime()).toBeGreaterThan(new Date(scenario.tripDates.start).getTime());
-      expect(scenario.tripDates.priceSeason.toLowerCase()).toMatch(/сезон|цена|бюджет|пик|низк|высок/i);
+      expect(scenario.simulatedToday).toMatchObject({
+        iso: expect.any(String),
+        label: expect.any(String),
+        marketContext: expect.any(String),
+        selectionTrainingFocus: expect.any(String)
+      });
+      expect(scenario.simulatedToday.iso).not.toBe(REALITY_DATE);
+      expect(scenario.simulatedToday.label).not.toMatch(/–|—/);
+      expect(scenario.simulatedToday.marketContext.toLowerCase()).toMatch(/сезон|цен|бюджет|спрос|налич/i);
     }
   });
 
-  it('spreads scenario trip dates over more than half a year from the current real date', () => {
-    const startDates = scenarios.map((scenario) => new Date(`${scenario.tripDates.start}T00:00:00.000Z`).getTime());
-    const minStart = Math.min(...startDates);
-    const maxStart = Math.max(...startDates);
+  it('spreads simulated current dates over more than half a year for seasonality practice', () => {
+    const timestamps = scenarios.map((scenario) => new Date(`${scenario.simulatedToday.iso}T00:00:00.000Z`).getTime());
+    const minDate = Math.min(...timestamps);
+    const maxDate = Math.max(...timestamps);
 
-    expect((maxStart - minStart) / DAY_MS).toBeGreaterThan(183);
-    expect((minStart - REALITY_DATE.getTime()) / DAY_MS).toBeGreaterThan(30);
+    expect((maxDate - minDate) / DAY_MS).toBeGreaterThan(183);
   });
 });

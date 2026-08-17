@@ -48,8 +48,8 @@ export function buildSelectionAnalysisPrompt({ scenarioId = 'turkey-family-hard'
     user: [
       `Сценарий: ${scenario.title}`,
       `Критерии клиента: ${scenario.clientProfile.budget}; ${scenario.clientProfile.hiddenNeed}; ${scenario.clientProfile.trigger}`,
-      scenario.tripDates ? `Даты поездки: ${scenario.tripDates.label}` : '',
-      scenario.tripDates ? `Сезон/цена: ${scenario.tripDates.priceSeason}` : '',
+      scenario.simulatedToday ? `Текущая дата сценария: ${scenario.simulatedToday.label}` : '',
+      scenario.simulatedToday ? `Рыночный контекст на эту дату: ${scenario.simulatedToday.marketContext}` : '',
       `Семья/контекст: ${scenario.clientProfile.name}, ${scenario.clientProfile.family}`,
       '',
       'Реальная подборка от менеджера:',
