@@ -64,9 +64,8 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .headActions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ghost, .linkButton { border: 0; background: transparent; color: var(--green-dark); font-weight: 800; padding: 8px 0; }
 .copyState { margin: 8px 18px 0; color: var(--green-dark); font-size: 13px; font-weight: 850; }
-.tripDatesCard { margin: 12px 18px 0; display: grid; gap: 5px; padding: 12px 14px; border: 1px solid rgba(11,132,99,.18); border-radius: 16px; background: #eef8f2; color: var(--green-dark); }
-.tripDatesCard b { font-size: 14px; }
-.tripDatesCard span { color: #33443d; font-size: 13px; line-height: 1.35; }
+.simulatedDate { margin: 12px 18px 0; display: inline-grid; justify-self: start; padding: 8px 12px; border: 1px solid rgba(11,132,99,.18); border-radius: 999px; background: #eef8f2; color: var(--green-dark); }
+.simulatedDate b { font-size: 13px; }
 /* Selection analysis now happens inside the normal chat composer. */
 
 .dialogWindow { margin: 18px; padding: 18px; min-height: 360px; max-height: 52vh; overflow: auto; border-radius: 22px; background: #f8faf8; border: 1px solid var(--line); display: grid; align-content: start; gap: 12px; }

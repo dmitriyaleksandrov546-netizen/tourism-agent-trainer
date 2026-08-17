@@ -32,7 +32,7 @@ function App() {
   const [activePhase, setActivePhase] = useState(restoredAttempt?.activePhase || 'dialogue');
   const [selectionAnalysis, setSelectionAnalysis] = useState(restoredAttempt?.selectionAnalysis || null);
   const [isSending, setIsSending] = useState(false);
-  const [copyState, setCopyState] = useState(restoredAttempt ? 'Диалог восстановлен после обновления страницы' : '');
+  const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
   const [isTravelMemoOpen, setIsTravelMemoOpen] = useState(false);
@@ -53,7 +53,7 @@ function App() {
     setSelectionAnalysis(savedAttempt?.selectionAnalysis || null);
     setActivePhase(savedAttempt?.activePhase || 'dialogue');
     setIsSending(false);
-    setCopyState(savedAttempt ? 'Диалог восстановлен' : '');
+    setCopyState('');
     setIsTravelMemoOpen(false);
     setTravelMonitoring(null);
     setIsMonitoringTravelDocs(false);
@@ -295,10 +295,9 @@ function App() {
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
 
-              {activeScenario.tripDates && (
-                <div className="tripDatesCard" aria-label="Даты поездки в сценарии">
-                  <b>Даты поездки: {activeScenario.tripDates.label}</b>
-                  <span>{activeScenario.tripDates.priceSeason}</span>
+              {activeScenario.simulatedToday && (
+                <div className="simulatedDate" aria-label="Текущая дата в сценарии">
+                  <b>Текущая дата: {activeScenario.simulatedToday.label}</b>
                 </div>
               )}
 
