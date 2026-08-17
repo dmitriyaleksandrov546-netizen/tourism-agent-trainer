@@ -7,6 +7,12 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    { "path": "/api/travel-documents/monitor/turkey", "schedule": "0 5 * * *" },
+    { "path": "/api/travel-documents/monitor/uae", "schedule": "10 5 * * *" },
+    { "path": "/api/travel-documents/monitor/thailand", "schedule": "20 5 * * *" },
+    { "path": "/api/travel-documents/monitor/egypt", "schedule": "30 5 * * *" }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/(.*)", "destination": "/index.html" }

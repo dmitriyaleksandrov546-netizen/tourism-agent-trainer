@@ -73,10 +73,37 @@ export function normalizeSelectionAnalysis(raw = {}) {
   };
 }
 
-export function createSelectionAnalysisFallback({ scenarioId = 'turkey-family-hard', selectionInput = '', fetchError = '' }) {
+function summarizeFetchedSelection(fetchedText = '') {
+  const lines = String(fetchedText).split('\n').map((line) => line.trim()).filter(Boolean);
+  const options = lines
+    .map((line) => line.replace(/^\d+\.\s*/, ''))
+    .filter((line) => /^(Тур|Отель|Вариант по отелю):/i.test(line))
+    .slice(0, 4);
+  const prices = lines.filter((line) => /^Цена:/i.test(line)).slice(0, 4);
+  const ratings = lines.filter((line) => /^Рейтинг\/оценка:/i.test(line)).slice(0, 4);
+  return { options, prices, ratings };
+}
+
+export function createSelectionAnalysisFallback({ scenarioId = 'turkey-family-hard', selectionInput = '', fetchedText = '', fetchError = '' }) {
   const scenario = getScenarioById(scenarioId);
   const input = normalizeSelectionInput(selectionInput);
   const looksLikeUrlOnly = isSelectionUrl(input) && input.split(/\s+/).length <= 2;
+  const fetchedSummary = summarizeFetchedSelection(fetchedText);
+
+  if (looksLikeUrlOnly && fetchedSummary.options.length > 0) {
+    const optionText = fetchedSummary.options.join('; ');
+    const priceText = fetchedSummary.prices.length ? ` По ценам вижу: ${fetchedSummary.prices.join('; ')}.` : '';
+    const ratingText = fetchedSummary.ratings.length ? ` По рейтингам: ${fetchedSummary.ratings.join('; ')}.` : '';
+    return normalizeSelectionAnalysis({
+      qualityScore: 62,
+      criteria: [scenario.clientProfile.budget, scenario.clientProfile.hiddenNeed],
+      gaps: ['Подборка открыта через Tourvisor, но нужно отдельно объяснить клиенту компромиссы по отзывам/пляжу/детям.'],
+      clientReply: `Подборку открыла: вижу варианты ${optionText}.${priceText}${ratingText} Скажите, пожалуйста, какой вариант вы считаете основным и почему он подходит нам по пляжу, детям и отзывам?`,
+      managerTask: 'Сравнить открытые варианты Tourvisor с бюджетом, детьми, пляжем и отзывами; не ограничиваться отправкой ссылки.',
+      source: 'selection-analysis-fallback-tourvisor'
+    });
+  }
+
   if (looksLikeUrlOnly && fetchError) {
     return normalizeSelectionAnalysis({
       qualityScore: 35,

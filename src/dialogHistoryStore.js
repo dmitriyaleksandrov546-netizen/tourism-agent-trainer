@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'ttrainer.dialogHistory.v1';
+const CURRENT_ATTEMPT_KEY = 'ttrainer.currentAttempt.v1';
 const MAX_RECORDS = 50;
 
 function canUseStorage() {
@@ -59,6 +60,41 @@ export function clearDialogHistory() {
   if (!canUseStorage()) return [];
   window.localStorage.removeItem(STORAGE_KEY);
   return [];
+}
+
+export function loadCurrentAttempt() {
+  if (!canUseStorage()) return null;
+  try {
+    const raw = window.localStorage.getItem(CURRENT_ATTEMPT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.scenarioId || !Array.isArray(parsed.messages)) return null;
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+export function saveCurrentAttempt(attempt = {}) {
+  if (!canUseStorage()) return null;
+  const normalized = {
+    scenarioId: attempt.scenarioId,
+    messages: Array.isArray(attempt.messages) ? attempt.messages : [],
+    draft: attempt.draft || '',
+    lastEvaluation: attempt.lastEvaluation || null,
+    activePhase: attempt.activePhase || 'dialogue',
+    selectionAnalysis: attempt.selectionAnalysis || null,
+    checkedTravelItems: attempt.checkedTravelItems || {},
+    updatedAt: new Date().toISOString()
+  };
+  window.localStorage.setItem(CURRENT_ATTEMPT_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+export function clearCurrentAttempt() {
+  if (!canUseStorage()) return null;
+  window.localStorage.removeItem(CURRENT_ATTEMPT_KEY);
+  return null;
 }
 
 export function formatDialogRecord(record) {

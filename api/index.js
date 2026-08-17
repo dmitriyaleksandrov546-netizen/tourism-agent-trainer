@@ -2,6 +2,8 @@ import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from '../src/llmC
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from '../src/neuroclientPrompt.js';
 import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, isSelectionUrl, normalizeSelectionAnalysis, normalizeSelectionInput } from '../src/selectionAnalysis.js';
 import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs } from '../src/dialogLogStore.server.js';
+import { checkTravelDocumentSources } from '../src/travelDocumentMonitoring.js';
+import { fetchTourvisorCartText } from '../src/tourvisorSelection.js';
 
 function sendJson(res, status, payload, extraHeaders = {}) {
   res.statusCode = status;
@@ -46,10 +48,17 @@ function parseModelJson(text = '') {
 }
 
 async function fetchSelectionText(selectionInput = '') {
-  if (!isSelectionUrl(selectionInput)) return { fetchedText: '', fetchError: '' };
+  if (!isSelectionUrl(selectionInput)) return { fetchedText: '', fetchError: '', source: '' };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
+    try {
+      return await fetchTourvisorCartText(selectionInput, { signal: controller.signal });
+    } catch (tourvisorError) {
+      // Not every selection link is a Tourvisor cart. Fall back to plain HTML fetch below.
+      if (/tvcartid=/i.test(selectionInput)) throw tourvisorError;
+    }
+
     const response = await fetch(selectionInput, {
       signal: controller.signal,
       headers: { 'User-Agent': 'T-TRAINER selection analyzer' }
@@ -63,9 +72,9 @@ async function fetchSelectionText(selectionInput = '') {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 12000);
-    return { fetchedText: text, fetchError: '' };
+    return { fetchedText: text, fetchError: '', source: 'html-fetch' };
   } catch (error) {
-    return { fetchedText: '', fetchError: error?.message || 'failed to open selection link' };
+    return { fetchedText: '', fetchError: error?.message || 'failed to open selection link', source: '' };
   } finally {
     clearTimeout(timeout);
   }
@@ -83,6 +92,33 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET' && path.endsWith('/api/neuroclient/health')) {
     return sendJson(res, 200, { ok: true, ...getPublicLlmStatus(), dialogLogs: getDialogLogStoreStatus() }, headers);
+  }
+
+  if (path.includes('/api/travel-documents/monitor')) {
+    let body = {};
+    if (req.method === 'POST') {
+      try {
+        body = await readJsonBody(req);
+      } catch (_error) {
+        return sendJson(res, 400, { ok: false, error: 'invalid json' }, headers);
+      }
+    } else if (req.method !== 'GET') {
+      return sendJson(res, 405, { ok: false, error: 'method not allowed' }, headers);
+    }
+
+    const query = new URL(req.url || '/', 'https://ttrainer.local').searchParams;
+    const pathCountry = path.endsWith('/turkey') ? 'Турция'
+      : path.endsWith('/uae') ? 'ОАЭ'
+        : path.endsWith('/thailand') ? 'Таиланд'
+          : path.endsWith('/egypt') ? 'Египет'
+            : '';
+    const country = body?.country || query.get('country') || pathCountry || 'Турция';
+    try {
+      const report = await checkTravelDocumentSources({ country, previousSnapshots: body?.previousSnapshots || [] });
+      return sendJson(res, 200, report, headers);
+    } catch (error) {
+      return sendJson(res, 500, { ok: false, country, error: error?.message || 'travel document monitoring failed' }, headers);
+    }
   }
 
   if (path.endsWith('/api/dialog-logs')) {
@@ -137,20 +173,20 @@ export default async function handler(req, res) {
       return sendJson(res, 400, { ok: false, error: error?.message || 'selection content is required' }, headers);
     }
 
-    const { fetchedText, fetchError } = await fetchSelectionText(normalizedInput);
+    const { fetchedText, fetchError, source: fetchSource } = await fetchSelectionText(normalizedInput);
     const llmConfig = getLlmConfig();
     if (!llmConfig.configured) {
-      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError }), fetchError }, headers);
+      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchedText, fetchError }), fetchError, fetchSource }, headers);
     }
 
     try {
       const prompt = buildSelectionAnalysisPrompt({ scenarioId, selectionInput: normalizedInput, fetchedText, fetchError });
       const raw = await callConfiguredLlm(prompt);
       const analysis = normalizeSelectionAnalysis(parseModelJson(raw));
-      return sendJson(res, 200, { ok: true, analysis, fetchError, source: llmConfig.provider }, headers);
+      return sendJson(res, 200, { ok: true, analysis, fetchError, fetchSource, source: llmConfig.provider }, headers);
     } catch (error) {
       console.error('[selection-analysis-api]', error?.message || error);
-      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchError: fetchError || error?.message }), fetchError, source: 'fallback-after-analysis-error' }, headers);
+      return sendJson(res, 200, { ok: true, analysis: createSelectionAnalysisFallback({ scenarioId, selectionInput: normalizedInput, fetchedText, fetchError: fetchError || error?.message }), fetchError, fetchSource, source: 'fallback-after-analysis-error' }, headers);
     }
   }
 

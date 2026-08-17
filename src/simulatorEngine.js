@@ -337,6 +337,21 @@ export function analyzeSelectionLink(scenarioId = 'turkey-family-hard') {
   };
 }
 
+const businessSubstanceWords = [
+  'бюджет', 'дет', 'возраст', 'даты', 'когда', 'вылет', 'ноч', 'отель', 'подборк', 'вариант', 'пляж', 'питани', 'отзыв', 'риск', 'компромисс', 'дешевле', 'дороже', 'паспорт', 'документ', 'виза', 'оплат', 'бронь', 'депозит'
+];
+
+export function shouldShowEvaluationReview({ messages = [], agentText = '', phase = 'dialogue' } = {}) {
+  if (phase === 'selection-review') return true;
+  const agentMessages = messages.filter((message) => message.role === 'agent');
+  const clientText = messages.filter((message) => message.role === 'client').map((message) => message.text).join(' ').toLowerCase();
+  const normalizedAgent = normalize(agentText);
+  const combined = `${clientText} ${normalizedAgent}`;
+  const hasSubstance = hasAny(combined, businessSubstanceWords);
+  const hasManagerWork = hasAny(normalizedAgent, ['уточню', 'проверю', 'пришлю', 'подберу', 'сравню', 'вариант', 'бюджет', 'даты', 'отзывы', 'риск']);
+  return agentMessages.length >= 2 && hasSubstance && hasManagerWork;
+}
+
 export function evaluateAgentReply(text = '', scenarioArg = scenarios[0], options = {}) {
   const scenario = typeof scenarioArg === 'string' ? getScenarioById(scenarioArg) : scenarioArg || scenarios[0];
   const normalized = normalize(text);

@@ -1,34 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios } from './simulatorEngine.js';
+import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, shouldShowEvaluationReview } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
 import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
 import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
+import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
 import {
   clearDialogHistory,
+  clearCurrentAttempt,
   createDialogRecord,
   formatDialogRecord,
+  loadCurrentAttempt,
   loadDialogHistory,
   removeDialogRecord,
+  saveCurrentAttempt,
   upsertDialogRecord
 } from './dialogHistoryStore.js';
 import { deleteServerDialogRecord, fetchServerDialogHistory, saveServerDialogRecord } from './dialogHistoryApi.js';
 import './styles.css';
 
 function App() {
-  const [activeScenarioId, setActiveScenarioId] = useState('turkey-family-hard');
-  const [messages, setMessages] = useState(() => createInitialMessages('turkey-family-hard'));
-  const [draft, setDraft] = useState('');
-  const [lastEvaluation, setLastEvaluation] = useState(null);
-  const [activePhase, setActivePhase] = useState('dialogue');
-  const [selectionAnalysis, setSelectionAnalysis] = useState(null);
+  const restoredAttempt = useMemo(() => loadCurrentAttempt(), []);
+  const [activeScenarioId, setActiveScenarioId] = useState(restoredAttempt?.scenarioId || 'turkey-family-hard');
+  const [messages, setMessages] = useState(() => restoredAttempt?.messages?.length ? restoredAttempt.messages : createInitialMessages(restoredAttempt?.scenarioId || 'turkey-family-hard'));
+  const [draft, setDraft] = useState(restoredAttempt?.draft || '');
+  const [lastEvaluation, setLastEvaluation] = useState(restoredAttempt?.lastEvaluation || null);
+  const [activePhase, setActivePhase] = useState(restoredAttempt?.activePhase || 'dialogue');
+  const [selectionAnalysis, setSelectionAnalysis] = useState(restoredAttempt?.selectionAnalysis || null);
   const [isSending, setIsSending] = useState(false);
-  const [copyState, setCopyState] = useState('');
+  const [copyState, setCopyState] = useState(restoredAttempt ? 'Диалог восстановлен после обновления страницы' : '');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
   const [isTravelMemoOpen, setIsTravelMemoOpen] = useState(false);
-  const [checkedTravelItems, setCheckedTravelItems] = useState({});
+  const [travelMonitoring, setTravelMonitoring] = useState(null);
+  const [isMonitoringTravelDocs, setIsMonitoringTravelDocs] = useState(false);
+  const [checkedTravelItems, setCheckedTravelItems] = useState(restoredAttempt?.checkedTravelItems || {});
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
   const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
@@ -43,10 +50,13 @@ function App() {
     setIsSending(false);
     setCopyState('');
     setIsTravelMemoOpen(false);
+    setTravelMonitoring(null);
+    setIsMonitoringTravelDocs(false);
     setCheckedTravelItems({});
   };
 
   const resetAttempt = () => {
+    clearCurrentAttempt();
     setMessages(createInitialMessages(activeScenarioId, Date.now()));
     setDraft('');
     setLastEvaluation(null);
@@ -55,6 +65,8 @@ function App() {
     setIsSending(false);
     setCopyState('');
     setIsTravelMemoOpen(false);
+    setTravelMonitoring(null);
+    setIsMonitoringTravelDocs(false);
     setCheckedTravelItems({});
   };
 
@@ -96,6 +108,20 @@ function App() {
 
   const resetTravelChecklist = () => setCheckedTravelItems({});
 
+  const openTravelMemo = async () => {
+    setIsTravelMemoOpen(true);
+    setIsMonitoringTravelDocs(true);
+    setTravelMonitoring(null);
+    try {
+      const report = await requestTravelDocumentMonitoring({ country: travelChecklist.country });
+      setTravelMonitoring(report);
+    } catch (error) {
+      setTravelMonitoring({ ok: false, status: 'error', managerSummary: error?.message || 'Не удалось проверить источники', sources: [], changes: [] });
+    } finally {
+      setIsMonitoringTravelDocs(false);
+    }
+  };
+
   const clearHistory = () => {
     setDialogHistory(clearDialogHistory());
     setCopyState('История очищена');
@@ -119,7 +145,8 @@ function App() {
     if (!text || isSending) return;
 
     const isSelectionMessage = shouldAnalyzeSelectionFromMessage(text);
-    const evaluation = isSelectionMessage ? null : evaluateAgentReply(text, activeScenario, { phase: activePhase });
+    const shouldShowReview = !isSelectionMessage && shouldShowEvaluationReview({ messages, agentText: text, phase: activePhase });
+    const evaluation = shouldShowReview ? evaluateAgentReply(text, activeScenario, { phase: activePhase }) : null;
     const turn = messages.filter((m) => m.role === 'agent').length + 1;
     const thinkingId = `client-thinking-${Date.now()}`;
     const nextMessages = [
@@ -190,6 +217,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    saveCurrentAttempt({
+      scenarioId: activeScenarioId,
+      messages,
+      draft,
+      lastEvaluation,
+      activePhase,
+      selectionAnalysis,
+      checkedTravelItems
+    });
+  }, [activeScenarioId, messages, draft, lastEvaluation, activePhase, selectionAnalysis, checkedTravelItems]);
+
+  useEffect(() => {
     const handleGlobalEnter = (event) => {
       if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = document.activeElement?.tagName?.toLowerCase();
@@ -222,7 +261,7 @@ function App() {
             <p className="kicker">Тренажёр турагента</p>
             <h1>Ответьте клиенту. Получите короткий разбор.</h1>
           </div>
-          {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Новый ответ</button>}
+          {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Заново</button>}
         </header>
 
         <section className="layout">
@@ -243,9 +282,9 @@ function App() {
               <div className="sectionHead">
                 <h2>2. Ответьте клиенту</h2>
                 <div className="headActions">
-                  <button className="ghost" onClick={() => setIsTravelMemoOpen(true)}>Памятка документов</button>
+                  <button className="ghost" onClick={openTravelMemo}>Памятка документов</button>
                   <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
-                  <button className="ghost" onClick={resetAttempt}>Очистить</button>
+                  <button className="ghost" onClick={resetAttempt}>Заново</button>
                 </div>
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
@@ -281,6 +320,8 @@ function App() {
                 checklist={travelChecklist}
                 checkedItems={checkedTravelItems}
                 isOpen={isTravelMemoOpen}
+                monitoring={travelMonitoring}
+                isMonitoring={isMonitoringTravelDocs}
                 onClose={() => setIsTravelMemoOpen(false)}
                 onToggle={toggleTravelItem}
                 onReset={resetTravelChecklist}
@@ -292,7 +333,7 @@ function App() {
   );
 }
 
-function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, onClose, onToggle, onReset }) {
+function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring, isMonitoring, onClose, onToggle, onReset }) {
   if (!isOpen) return null;
   const doneCount = checklist.checks.filter((item) => checkedItems[item.id]).length;
 
@@ -309,6 +350,62 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, onClose, on
       <p className="travelSummary">{checklist.summary}</p>
       {checklist.clientContext && <p className="travelContext">Контекст клиента: {checklist.clientContext}</p>}
       <p className="travelWarning">{checklist.warning}</p>
+
+      <section className="travelBlock monitoringBlock">
+        <div className="travelChecklistHead">
+          <h3>Мониторинг правил</h3>
+          <span>{isMonitoring ? 'проверка' : monitoring?.status || 'ожидает'}</span>
+        </div>
+        <p>{isMonitoring ? 'Открываю официальные источники и сравниваю с прошлой проверкой...' : monitoring?.managerSummary || 'Проверка запустится при открытии памятки.'}</p>
+        {!!monitoring?.changes?.length && (
+          <div className="monitoringChanges">
+            {monitoring.changes.map((change) => (
+              <article key={change.id}>
+                <b>{change.title}</b>
+                <small>{change.url}</small>
+                <p><b>Было:</b> {change.before}</p>
+                <p><b>Стало:</b> {change.after}</p>
+              </article>
+            ))}
+          </div>
+        )}
+        {!!monitoring?.sources?.length && (
+          <div className="sourceStatusList">
+            {monitoring.sources.map((source) => (
+              <p key={source.id}>• {source.title}: {source.changeStatus === 'changed' ? 'изменилось' : source.changeStatus === 'unchanged' ? 'без изменений' : source.changeStatus === 'new' ? 'создан baseline' : 'не открылось'}</p>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="travelBlock readyMemo">
+        <h3>Готовая памятка для менеджера</h3>
+        <div className="ruleGrid">
+          {Object.entries(checklist.readyRules).map(([key, value]) => (
+            <article key={key}>
+              <b>{value.split(':')[0]}</b>
+              <p>{value.replace(/^[^:]+:\s*/, '')}</p>
+            </article>
+          ))}
+        </div>
+        <div className="memoColumns">
+          <div>
+            <h4>Нужно подготовить</h4>
+            <ul>{checklist.requiredDocuments.map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+          {!!checklist.notRequired.length && (
+            <div>
+              <h4>Не нужно</h4>
+              <ul>{checklist.notRequired.map((item) => <li key={item}>{item}</li>)}</ul>
+            </div>
+          )}
+          <div>
+            <h4>Проверить отдельно</h4>
+            <ul>{checklist.checkSeparately.map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+        </div>
+        <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
+      </section>
 
       <section className="travelBlock">
         <h3>Что уточнить у клиента</h3>
