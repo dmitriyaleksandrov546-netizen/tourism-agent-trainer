@@ -6,3 +6,7 @@ export function shouldRenderAnswerReview() {
 export function shouldRenderDailySourceControl() {
   return false;
 }
+
+export function shouldRenderFreshSources(checklist) {
+  return Array.isArray(checklist?.sourceNotes) && checklist.sourceNotes.length > 0;
+}

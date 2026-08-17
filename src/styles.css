@@ -129,6 +129,10 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
 .resetMemo { justify-self: start; }
 .sources p, .monitoringBlock p { margin: 0; color: #33443d; line-height: 1.35; }
 .sources small, .monitoringChanges small { color: var(--muted); line-height: 1.35; }
+.sourceTitleRow { display: flex; align-items: center; gap: 8px; }
+.infoIcon { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #e6f7ef; color: var(--green-dark); font-size: 12px; font-weight: 950; cursor: help; }
+.infoIcon::after { content: attr(aria-label); position: absolute; z-index: 5; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: min(320px, 76vw); padding: 10px 12px; border-radius: 12px; background: #173229; color: #fff; font-size: 12px; font-weight: 650; line-height: 1.35; box-shadow: 0 14px 36px rgba(5,30,20,.2); opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+.infoIcon:hover::after, .infoIcon:focus::after { opacity: 1; }
 .monitoringChanges, .sourceStatusList { display: grid; gap: 8px; }
 .monitoringChanges article { display: grid; gap: 5px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: #fff; }
 .monitoringChanges b { color: var(--ink); }

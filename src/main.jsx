@@ -6,7 +6,7 @@ import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
 import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
-import { shouldRenderAnswerReview, shouldRenderDailySourceControl } from './uiVisibility.js';
+import { shouldRenderAnswerReview, shouldRenderDailySourceControl, shouldRenderFreshSources } from './uiVisibility.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -383,7 +383,10 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
       </section>
 
       <section className="travelBlock readyMemo">
-        <h3>Готовая памятка для менеджера</h3>
+        <div className="travelChecklistHead">
+          <h3>Памятка менеджера</h3>
+          <span>{doneCount}/{checklist.checks.length}</span>
+        </div>
         <ul className="readyList">
           {checklist.readyItems.map((item) => (
             <li key={item.label}>
@@ -409,20 +412,6 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
           </div>
         </div>
         <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
-      </section>
-
-      <section className="travelBlock">
-        <h3>Что уточнить у клиента</h3>
-        <ol>
-          {checklist.questions.map((question) => <li key={question}>{question}</li>)}
-        </ol>
-      </section>
-
-      <section className="travelBlock">
-        <div className="travelChecklistHead">
-          <h3>Чеклист менеджера</h3>
-          <span>{doneCount}/{checklist.checks.length}</span>
-        </div>
         <div className="travelChecks">
           {checklist.checks.map((item) => (
             <label key={item.id} className={checkedItems[item.id] ? 'done' : ''}>
@@ -432,6 +421,23 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
           ))}
         </div>
       </section>
+
+      <section className="travelBlock">
+        <h3>Что уточнить у клиента</h3>
+        <ol>
+          {checklist.questions.map((question) => <li key={question}>{question}</li>)}
+        </ol>
+      </section>
+
+      {shouldRenderFreshSources(checklist) && (
+        <section className="travelBlock sources">
+          <div className="sourceTitleRow">
+            <h3>Источники для свежей проверки</h3>
+            <span className="infoIcon" tabIndex="0" aria-label={checklist.sourcePolicy} title={checklist.sourcePolicy}>i</span>
+          </div>
+          {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
+        </section>
+      )}
 
       {shouldRenderDailySourceControl(checklist) && (
         <section className="travelBlock sources">
