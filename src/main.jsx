@@ -6,7 +6,7 @@ import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
 import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
-import { shouldRenderAnswerReview } from './uiVisibility.js';
+import { shouldRenderAnswerReview, shouldRenderDailySourceControl } from './uiVisibility.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -336,7 +336,6 @@ function App() {
                 isMonitoring={isMonitoringTravelDocs}
                 onClose={() => setIsTravelMemoOpen(false)}
                 onToggle={toggleTravelItem}
-                onReset={resetTravelChecklist}
               />
             </section>
           </section>
@@ -345,7 +344,7 @@ function App() {
   );
 }
 
-function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring, isMonitoring, onClose, onToggle, onReset }) {
+function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring, isMonitoring, onClose, onToggle }) {
   if (!isOpen) return null;
   const doneCount = checklist.checks.filter((item) => checkedItems[item.id]).length;
 
@@ -432,18 +431,19 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
             </label>
           ))}
         </div>
-        <button className="ghost resetMemo" type="button" onClick={onReset}>Сбросить отметки</button>
       </section>
 
-      <section className="travelBlock sources">
-        <h3>Ежедневный контроль источников</h3>
-        <p>• Периодичность: каждый день</p>
-        <p>• Что сверяем: {checklist.dailyMonitoring.scope}</p>
-        <p>• Что получает менеджер: {checklist.dailyMonitoring.managerOutcome}</p>
-        <h3>Источники для свежей проверки</h3>
-        {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
-        <small>{checklist.sourcePolicy}</small>
-      </section>
+      {shouldRenderDailySourceControl(checklist) && (
+        <section className="travelBlock sources">
+          <h3>Ежедневный контроль источников</h3>
+          <p>• Периодичность: каждый день</p>
+          <p>• Что сверяем: {checklist.dailyMonitoring.scope}</p>
+          <p>• Что получает менеджер: {checklist.dailyMonitoring.managerOutcome}</p>
+          <h3>Источники для свежей проверки</h3>
+          {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
+          <small>{checklist.sourcePolicy}</small>
+        </section>
+      )}
     </aside>
   );
 }

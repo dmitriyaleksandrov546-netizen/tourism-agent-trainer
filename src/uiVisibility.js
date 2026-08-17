@@ -1,5 +1,8 @@
-// Product switch: answer review is paused in the operator UI for now.
-// Keep evaluation logic available for history/future use, but do not render the visible panel.
+// Product switches: paused UI panels stay easy to restore without deleting business logic.
 export function shouldRenderAnswerReview() {
+  return false;
+}
+
+export function shouldRenderDailySourceControl() {
   return false;
 }
