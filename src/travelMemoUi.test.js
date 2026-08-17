@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFreshSourcesTooltip, buildIntegratedMemoRows } from './travelMemoUi.js';
+import { buildFreshSourcesTooltip, buildIntegratedMemoRows, formatClientContext } from './travelMemoUi.js';
 
 describe('travel memo UI helpers', () => {
   it('moves source list into info tooltip instead of monitoring explanation copy', () => {
@@ -29,5 +29,10 @@ describe('travel memo UI helpers', () => {
       { id: 'memo-Египет-загранпаспорт', label: 'Загранпаспорт', text: 'проверить срок действия минимум 6 месяцев', checkable: true },
       { id: 'memo-Египет-не-нужно', label: 'Не нужно', text: 'не чекать как действие', checkable: false }
     ]);
+  });
+
+  it('capitalizes compact client context line', () => {
+    expect(formatClientContext('пара · до 120 000 ₽')).toBe('Пара · до 120 000 ₽');
+    expect(formatClientContext('2 взрослых + 2 ребёнка · дети: 2 года')).toBe('2 взрослых + 2 ребёнка · дети: 2 года');
   });
 });
