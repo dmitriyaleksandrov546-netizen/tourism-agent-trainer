@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'ttrainer.dialogHistory.v1';
 const CURRENT_ATTEMPT_KEY = 'ttrainer.currentAttempt.v1';
+const SCENARIO_ATTEMPTS_KEY = 'ttrainer.scenarioAttempts.v1';
 const MAX_RECORDS = 50;
 
 function canUseStorage() {
@@ -89,6 +90,42 @@ export function saveCurrentAttempt(attempt = {}) {
   };
   window.localStorage.setItem(CURRENT_ATTEMPT_KEY, JSON.stringify(normalized));
   return normalized;
+}
+
+export function loadScenarioAttempts() {
+  if (!canUseStorage()) return {};
+  try {
+    const raw = window.localStorage.getItem(SCENARIO_ATTEMPTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+export function loadScenarioAttempt(scenarioId) {
+  if (!scenarioId) return null;
+  const attempt = loadScenarioAttempts()[scenarioId];
+  if (!attempt?.scenarioId || !Array.isArray(attempt.messages)) return null;
+  return attempt;
+}
+
+export function saveScenarioAttempt(attempt = {}) {
+  if (!canUseStorage() || !attempt.scenarioId) return null;
+  const normalized = saveCurrentAttempt(attempt);
+  const attempts = loadScenarioAttempts();
+  attempts[normalized.scenarioId] = normalized;
+  window.localStorage.setItem(SCENARIO_ATTEMPTS_KEY, JSON.stringify(attempts));
+  return normalized;
+}
+
+export function clearScenarioAttempt(scenarioId) {
+  if (!canUseStorage() || !scenarioId) return null;
+  const attempts = loadScenarioAttempts();
+  delete attempts[scenarioId];
+  window.localStorage.setItem(SCENARIO_ATTEMPTS_KEY, JSON.stringify(attempts));
+  return null;
 }
 
 export function clearCurrentAttempt() {
