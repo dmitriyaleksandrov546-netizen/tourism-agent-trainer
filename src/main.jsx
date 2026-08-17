@@ -348,15 +348,15 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
       </div>
 
       <p className="travelSummary">{checklist.summary}</p>
-      {checklist.clientContext && <p className="travelContext">Контекст клиента: {checklist.clientContext}</p>}
-      <p className="travelWarning">{checklist.warning}</p>
+      {checklist.clientContext && <p className="travelContext">{checklist.clientContext}</p>}
+      {checklist.warning && <p className="travelWarning">{checklist.warning}</p>}
 
       <section className="travelBlock monitoringBlock">
         <div className="travelChecklistHead">
           <h3>Мониторинг правил</h3>
           <span>{isMonitoring ? 'проверка' : monitoring?.status || 'ожидает'}</span>
         </div>
-        <p>{isMonitoring ? 'Открываю официальные источники и сравниваю с прошлой проверкой...' : monitoring?.managerSummary || 'Проверка запустится при открытии памятки.'}</p>
+        <p>{isMonitoring ? 'Сверяю источники...' : monitoring?.changes?.length ? monitoring.managerSummary : 'Изменений не найдено.'}</p>
         {!!monitoring?.changes?.length && (
           <div className="monitoringChanges">
             {monitoring.changes.map((change) => (
@@ -369,39 +369,32 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
             ))}
           </div>
         )}
-        {!!monitoring?.sources?.length && (
-          <div className="sourceStatusList">
-            {monitoring.sources.map((source) => (
-              <p key={source.id}>• {source.title}: {source.changeStatus === 'changed' ? 'изменилось' : source.changeStatus === 'unchanged' ? 'без изменений' : source.changeStatus === 'new' ? 'создан baseline' : 'не открылось'}</p>
-            ))}
-          </div>
-        )}
       </section>
 
       <section className="travelBlock readyMemo">
         <h3>Готовая памятка для менеджера</h3>
-        <div className="ruleGrid">
-          {Object.entries(checklist.readyRules).map(([key, value]) => (
-            <article key={key}>
-              <b>{value.split(':')[0]}</b>
-              <p>{value.replace(/^[^:]+:\s*/, '')}</p>
-            </article>
+        <ul className="readyList">
+          {checklist.readyItems.map((item) => (
+            <li key={item.label}>
+              <b>{item.label}</b>
+              <span>{item.text}</span>
+            </li>
           ))}
-        </div>
+        </ul>
         <div className="memoColumns">
-          <div>
+          <div className="memoSection">
             <h4>Нужно подготовить</h4>
-            <ul>{checklist.requiredDocuments.map((item) => <li key={item}>{item}</li>)}</ul>
+            <p>{checklist.requiredDocuments.join(' · ')}</p>
           </div>
           {!!checklist.notRequired.length && (
-            <div>
+            <div className="memoSection">
               <h4>Не нужно</h4>
-              <ul>{checklist.notRequired.map((item) => <li key={item}>{item}</li>)}</ul>
+              <p>{checklist.notRequired.join(' · ')}</p>
             </div>
           )}
-          <div>
+          <div className="memoSection">
             <h4>Проверить отдельно</h4>
-            <ul>{checklist.checkSeparately.map((item) => <li key={item}>{item}</li>)}</ul>
+            <p>{checklist.checkSeparately.join(' · ')}</p>
           </div>
         </div>
         <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
