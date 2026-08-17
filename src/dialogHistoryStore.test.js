@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearCurrentAttempt, loadCurrentAttempt, saveCurrentAttempt } from './dialogHistoryStore.js';
+import {
+  clearCurrentAttempt,
+  clearScenarioAttempt,
+  loadCurrentAttempt,
+  loadScenarioAttempt,
+  saveCurrentAttempt,
+  saveScenarioAttempt
+} from './dialogHistoryStore.js';
 
 function installLocalStorage() {
   const store = new Map();
@@ -39,5 +46,35 @@ describe('current dialog attempt persistence', () => {
     clearCurrentAttempt();
 
     expect(loadCurrentAttempt()).toBeNull();
+  });
+
+  it('keeps a separate current attempt for each scenario', () => {
+    const turkeyAttempt = {
+      scenarioId: 'turkey-family-hard',
+      messages: [{ id: 'agent-1', role: 'agent', text: 'Подберу Турцию', time: 'ваш ответ' }],
+      draft: 'черновик Турция'
+    };
+    const egyptAttempt = {
+      scenarioId: 'egypt-price-objection',
+      messages: [{ id: 'agent-2', role: 'agent', text: 'Сравню Египет', time: 'ваш ответ' }],
+      draft: 'черновик Египет'
+    };
+
+    saveScenarioAttempt(turkeyAttempt);
+    saveScenarioAttempt(egyptAttempt);
+
+    expect(loadScenarioAttempt('turkey-family-hard')).toMatchObject(turkeyAttempt);
+    expect(loadScenarioAttempt('egypt-price-objection')).toMatchObject(egyptAttempt);
+    expect(loadCurrentAttempt()).toMatchObject(egyptAttempt);
+  });
+
+  it('clears only the selected scenario attempt on reset', () => {
+    saveScenarioAttempt({ scenarioId: 'turkey-family-hard', messages: [{ id: 't', role: 'agent', text: 'T' }], draft: '' });
+    saveScenarioAttempt({ scenarioId: 'egypt-price-objection', messages: [{ id: 'e', role: 'agent', text: 'E' }], draft: '' });
+
+    clearScenarioAttempt('turkey-family-hard');
+
+    expect(loadScenarioAttempt('turkey-family-hard')).toBeNull();
+    expect(loadScenarioAttempt('egypt-price-objection')?.messages[0].text).toBe('E');
   });
 });

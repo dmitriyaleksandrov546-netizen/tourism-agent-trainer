@@ -9,12 +9,14 @@ import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.j
 import {
   clearDialogHistory,
   clearCurrentAttempt,
+  clearScenarioAttempt,
   createDialogRecord,
   formatDialogRecord,
   loadCurrentAttempt,
   loadDialogHistory,
+  loadScenarioAttempt,
   removeDialogRecord,
-  saveCurrentAttempt,
+  saveScenarioAttempt,
   upsertDialogRecord
 } from './dialogHistoryStore.js';
 import { deleteServerDialogRecord, fetchServerDialogHistory, saveServerDialogRecord } from './dialogHistoryApi.js';
@@ -41,22 +43,25 @@ function App() {
   const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
 
   const selectScenario = (id) => {
+    if (id === activeScenarioId) return;
+    const savedAttempt = loadScenarioAttempt(id);
     setActiveScenarioId(id);
-    setMessages(createInitialMessages(id, Date.now()));
-    setDraft('');
-    setLastEvaluation(null);
-    setSelectionAnalysis(null);
-    setActivePhase('dialogue');
+    setMessages(savedAttempt?.messages?.length ? savedAttempt.messages : createInitialMessages(id, Date.now()));
+    setDraft(savedAttempt?.draft || '');
+    setLastEvaluation(savedAttempt?.lastEvaluation || null);
+    setSelectionAnalysis(savedAttempt?.selectionAnalysis || null);
+    setActivePhase(savedAttempt?.activePhase || 'dialogue');
     setIsSending(false);
-    setCopyState('');
+    setCopyState(savedAttempt ? 'Диалог восстановлен' : '');
     setIsTravelMemoOpen(false);
     setTravelMonitoring(null);
     setIsMonitoringTravelDocs(false);
-    setCheckedTravelItems({});
+    setCheckedTravelItems(savedAttempt?.checkedTravelItems || {});
   };
 
   const resetAttempt = () => {
     clearCurrentAttempt();
+    clearScenarioAttempt(activeScenarioId);
     setMessages(createInitialMessages(activeScenarioId, Date.now()));
     setDraft('');
     setLastEvaluation(null);
@@ -217,7 +222,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    saveCurrentAttempt({
+    saveScenarioAttempt({
       scenarioId: activeScenarioId,
       messages,
       draft,
