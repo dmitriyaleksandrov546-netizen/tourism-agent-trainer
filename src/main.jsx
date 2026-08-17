@@ -7,6 +7,7 @@ import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
 import { shouldRenderAnswerReview, shouldRenderDailySourceControl, shouldRenderFreshSources } from './uiVisibility.js';
+import { buildFreshSourcesTooltip, buildIntegratedMemoRows } from './travelMemoUi.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -346,7 +347,9 @@ function App() {
 
 function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring, isMonitoring, onClose, onToggle }) {
   if (!isOpen) return null;
-  const doneCount = checklist.checks.filter((item) => checkedItems[item.id]).length;
+  const memoRows = buildIntegratedMemoRows(checklist);
+  const doneCount = memoRows.filter((item) => checkedItems[item.id]).length;
+  const freshSourcesTooltip = buildFreshSourcesTooltip(checklist);
 
   return (
     <aside className="travelDrawer" aria-label="Памятка документов для менеджера">
@@ -385,16 +388,19 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
       <section className="travelBlock readyMemo">
         <div className="travelChecklistHead">
           <h3>Памятка менеджера</h3>
-          <span>{doneCount}/{checklist.checks.length}</span>
+          <span>{doneCount}/{memoRows.filter((item) => item.checkable).length}</span>
         </div>
-        <ul className="readyList">
-          {checklist.readyItems.map((item) => (
-            <li key={item.label}>
+        <div className="readyList integratedMemoList">
+          {memoRows.map((item) => (
+            <label key={item.id} className={checkedItems[item.id] ? 'done' : ''}>
               <b>{item.label}</b>
               <span>{item.text}</span>
-            </li>
+              {item.checkable ? (
+                <input type="checkbox" checked={Boolean(checkedItems[item.id])} onChange={() => onToggle(item.id)} />
+              ) : <i aria-hidden="true" />}
+            </label>
           ))}
-        </ul>
+        </div>
         <div className="memoColumns">
           <div className="memoSection">
             <h4>Нужно подготовить</h4>
@@ -412,14 +418,6 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
           </div>
         </div>
         <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
-        <div className="travelChecks">
-          {checklist.checks.map((item) => (
-            <label key={item.id} className={checkedItems[item.id] ? 'done' : ''}>
-              <input type="checkbox" checked={Boolean(checkedItems[item.id])} onChange={() => onToggle(item.id)} />
-              <span>{item.text}</span>
-            </label>
-          ))}
-        </div>
       </section>
 
       <section className="travelBlock">
@@ -433,9 +431,8 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
         <section className="travelBlock sources">
           <div className="sourceTitleRow">
             <h3>Источники для свежей проверки</h3>
-            <span className="infoIcon" tabIndex="0" aria-label={checklist.sourcePolicy} title={checklist.sourcePolicy}>i</span>
+            <span className="infoIcon" tabIndex="0" aria-label={freshSourcesTooltip} title={freshSourcesTooltip}>i</span>
           </div>
-          {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
         </section>
       )}
 
