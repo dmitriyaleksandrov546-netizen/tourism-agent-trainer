@@ -7,7 +7,7 @@ import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
 import { shouldRenderAnswerReview, shouldRenderDailySourceControl, shouldRenderFreshSources } from './uiVisibility.js';
-import { buildFreshSourcesTooltip, buildIntegratedMemoRows } from './travelMemoUi.js';
+import { buildFreshSourcesTooltip, buildIntegratedMemoRows, formatClientContext } from './travelMemoUi.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -361,29 +361,8 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
         <button type="button" onClick={onClose} aria-label="Закрыть памятку">×</button>
       </div>
 
-      <p className="travelSummary">{checklist.summary}</p>
-      {checklist.clientContext && <p className="travelContext">{checklist.clientContext}</p>}
+      {checklist.clientContext && <p className="travelContext">{formatClientContext(checklist.clientContext)}</p>}
       {checklist.warning && <p className="travelWarning">{checklist.warning}</p>}
-
-      <section className="travelBlock monitoringBlock">
-        <div className="travelChecklistHead">
-          <h3>Мониторинг правил</h3>
-          <span>{isMonitoring ? 'проверка' : monitoring?.status || 'ожидает'}</span>
-        </div>
-        <p>{isMonitoring ? 'Сверяю источники...' : monitoring?.changes?.length ? monitoring.managerSummary : 'Изменений не найдено.'}</p>
-        {!!monitoring?.changes?.length && (
-          <div className="monitoringChanges">
-            {monitoring.changes.map((change) => (
-              <article key={change.id}>
-                <b>{change.title}</b>
-                <small>{change.url}</small>
-                <p><b>Было:</b> {change.before}</p>
-                <p><b>Стало:</b> {change.after}</p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section className="travelBlock readyMemo">
         <div className="travelChecklistHead">
@@ -417,7 +396,6 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
             <p>{checklist.checkSeparately.join(' · ')}</p>
           </div>
         </div>
-        <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
       </section>
 
       <section className="travelBlock">
@@ -428,11 +406,25 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
       </section>
 
       {shouldRenderFreshSources(checklist) && (
-        <section className="travelBlock sources">
+        <section className="travelBlock sources monitoringBlock">
           <div className="sourceTitleRow">
             <h3>Источники для свежей проверки</h3>
+            <span className="monitoringStatus">{isMonitoring ? 'проверка' : monitoring?.status || 'ожидает'}</span>
             <span className="infoIcon" tabIndex="0" aria-label={freshSourcesTooltip} title={freshSourcesTooltip}>i</span>
           </div>
+          <p>{isMonitoring ? 'Сверяю источники...' : monitoring?.changes?.length ? monitoring.managerSummary : 'Изменений не найдено.'}</p>
+          {!!monitoring?.changes?.length && (
+            <div className="monitoringChanges">
+              {monitoring.changes.map((change) => (
+                <article key={change.id}>
+                  <b>{change.title}</b>
+                  <small>{change.url}</small>
+                  <p><b>Было:</b> {change.before}</p>
+                  <p><b>Стало:</b> {change.after}</p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

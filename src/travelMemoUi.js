@@ -27,3 +27,7 @@ export function buildIntegratedMemoRows(checklist = {}) {
     };
   });
 }
+
+export function formatClientContext(value = '') {
+  return String(value).replace(/^\p{Ll}/u, (letter) => letter.toLocaleUpperCase('ru-RU'));
+}
