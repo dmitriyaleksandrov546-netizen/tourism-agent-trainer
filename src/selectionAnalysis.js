@@ -13,6 +13,20 @@ export function isSelectionUrl(input = '') {
   return urlPattern.test(String(input).trim());
 }
 
+export function shouldAnalyzeSelectionFromMessage(input = '') {
+  const text = String(input).trim();
+  if (!text) return false;
+  const normalized = text.toLowerCase();
+  if (isSelectionUrl(text) || /https?:\/\//i.test(text)) return true;
+
+  const hasHotelMarker = /\bhotel\b|\bresort\b|отел[ьяе]|\d\s*\*/i.test(text);
+  const hasSelectionMarker = /подборк|вариант[а-я]*|турц|егип|оаэ|дуба|таил|кемер|сиде|хургад|шарм|пляж|питани|аквапарк|отзыв|tripadvisor|яндекс/i.test(normalized);
+  const hasPriceOrRating = /\d[\d\s]*(₽|руб|тыс|eur|usd|€|\$)|\d[,.]\d\s*\/\s*5/i.test(normalized);
+  const promisesFutureSelection = /пришлю|подберу|соберу|сравню|проверю/i.test(normalized) && /до\s*\d{1,2}|сегодня|завтра|вариант/i.test(normalized);
+
+  return !promisesFutureSelection && hasHotelMarker && (hasSelectionMarker || hasPriceOrRating);
+}
+
 export function buildSelectionAnalysisPrompt({ scenarioId = 'turkey-family-hard', selectionInput = '', fetchedText = '', fetchError = '' }) {
   const scenario = getScenarioById(scenarioId);
   const normalizedInput = normalizeSelectionInput(selectionInput);

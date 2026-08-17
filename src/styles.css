@@ -64,15 +64,7 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .headActions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ghost, .linkButton { border: 0; background: transparent; color: var(--green-dark); font-weight: 800; padding: 8px 0; }
 .copyState { margin: 8px 18px 0; color: var(--green-dark); font-size: 13px; font-weight: 850; }
-.selectionCard { margin: 12px 18px 0; border-radius: 20px; background: #fff8ea; border: 1px solid rgba(244,162,97,.42); padding: 14px; display: grid; gap: 8px; color: #4d3920; font-size: 13px; }
-.selectionCard h3 { margin-bottom: 0; }
-.selectionCard p { margin: 0; line-height: 1.42; }
-.selectionInputBox { display: grid; gap: 10px; margin: 0 18px 4px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
-.selectionInputBox label { display: grid; gap: 8px; }
-.selectionInputBox span { font-weight: 850; color: var(--ink); }
-.selectionInputBox textarea { min-height: 92px; }
-.selectionInputBox button { min-height: 46px; border: 0; border-radius: 14px; background: #e6f7ef; color: var(--green-dark); font-weight: 950; }
-.selectionInputBox button:disabled { opacity: .65; cursor: wait; }
+/* Selection analysis now happens inside the normal chat composer. */
 
 .dialogWindow { margin: 18px; padding: 18px; min-height: 360px; max-height: 52vh; overflow: auto; border-radius: 22px; background: #f8faf8; border: 1px solid var(--line); display: grid; align-content: start; gap: 12px; }
 .dialogMessage { width: min(76%, 760px); padding: 13px 15px; border-radius: 18px; box-shadow: 0 8px 22px rgba(23, 44, 36, .06); }
@@ -82,11 +74,10 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .dialogMessage p { margin: 0; line-height: 1.45; white-space: pre-wrap; }
 .dialogMessage small { display: block; margin-top: 8px; opacity: .62; }
 
-.answerBox { display: grid; gap: 8px; margin: 18px; }
-.answerBox span { color: var(--ink); font-weight: 850; }
-textarea { width: 100%; min-height: 128px; resize: vertical; border: 1px solid var(--line); border-radius: 18px; padding: 15px; outline: none; color: var(--ink); background: #fff; line-height: 1.45; }
+.answerBox { display: grid; margin: 14px 18px 10px; }
+textarea { width: 100%; min-height: 104px; resize: vertical; border: 1px solid var(--line); border-radius: 18px; padding: 15px; outline: none; color: var(--ink); background: #fff; line-height: 1.45; }
 textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,99,.1); }
-.primary { margin: 0 18px 18px; min-height: 52px; width: calc(100% - 36px); border: 0; border-radius: 16px; background: var(--green); color: white; font-size: 17px; font-weight: 950; }
+.primary { margin: 0 18px 18px auto; min-height: 42px; width: auto; min-width: 132px; border: 0; border-radius: 14px; background: var(--green); color: white; font-size: 15px; font-weight: 950; padding: 0 18px; display: block; }
 .primary:hover { background: var(--green-dark); }
 .primary:disabled { opacity: .68; cursor: wait; }
 

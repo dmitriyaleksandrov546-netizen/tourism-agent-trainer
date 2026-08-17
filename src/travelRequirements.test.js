@@ -20,7 +20,9 @@ describe('travelRequirements', () => {
 
     expect(checklist.country).toBe('ОАЭ');
     expect(checklist.sourceNotes.length).toBeGreaterThanOrEqual(3);
-    expect(checklist.sourcePolicy).toContain('после загрузки URL базы');
+    expect(checklist.dailyMonitoring.schedule).toBe('daily');
+    expect(checklist.dailyMonitoring.scope).toContain('официальные источники');
+    expect(checklist.sourcePolicy.toLowerCase()).toContain('ежедневно');
     expect(checklist.warning).toContain('гражданства');
   });
 });
