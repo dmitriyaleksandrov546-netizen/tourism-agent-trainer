@@ -76,6 +76,8 @@ export function buildNeuroclientPrompt({ scenarioId, agentText, turn = 1, histor
       `Сценарий: ${scenario.title}`,
       `Тип клиента: ${scenario.clientProfile.name}, ${scenario.clientProfile.family}`,
       `Бюджет: ${scenario.clientProfile.budget}`,
+      scenario.tripDates ? `Даты поездки в сценарии: ${scenario.tripDates.label} (${scenario.tripDates.priceSeason})` : '',
+      scenario.tripDates ? `Задача для подбора по датам: ${scenario.tripDates.selectionTrainingFocus}` : '',
       `Скрытая настоящая потребность: ${scenario.clientProfile.hiddenNeed}`,
       `Триггер/страх: ${scenario.clientProfile.trigger}`,
       `Ход диалога: ${turn}`,

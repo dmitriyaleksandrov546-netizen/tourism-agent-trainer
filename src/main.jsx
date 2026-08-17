@@ -295,6 +295,13 @@ function App() {
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
 
+              {activeScenario.tripDates && (
+                <div className="tripDatesCard" aria-label="Даты поездки в сценарии">
+                  <b>Даты поездки: {activeScenario.tripDates.label}</b>
+                  <span>{activeScenario.tripDates.priceSeason}</span>
+                </div>
+              )}
+
               <div className="dialogWindow" aria-label="Диалог с клиентом">
                 {messages.map((message) => (
                   <article key={message.id} className={`dialogMessage ${message.role}`}>
