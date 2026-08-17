@@ -6,6 +6,7 @@ import { requestSelectionAnalysis } from './selectionAnalysisApi.js';
 import { shouldAnalyzeSelectionFromMessage } from './selectionAnalysis.js';
 import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
+import { shouldRenderAnswerReview } from './uiVisibility.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -320,7 +321,7 @@ function App() {
 
               <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Отправляю...' : 'Отправить'}</button>
 
-              {lastEvaluation && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
+              {shouldRenderAnswerReview(lastEvaluation) && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
               <TravelRequirementsDrawer
                 checklist={travelChecklist}
                 checkedItems={checkedTravelItems}
