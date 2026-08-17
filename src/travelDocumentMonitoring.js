@@ -176,6 +176,41 @@ export async function checkTravelDocumentSources({ country, previousSnapshots = 
   return buildMonitoringReport({ country, checkedAt, sources, previousSnapshots });
 }
 
+export async function checkTravelDocumentSourcesWithSnapshotStore({
+  country,
+  previousSnapshots,
+  snapshotStore,
+  fetchText = defaultFetchText,
+  checkedAt = new Date().toISOString()
+} = {}) {
+  const hasExplicitSnapshots = Array.isArray(previousSnapshots) && previousSnapshots.length > 0;
+  const storedSnapshots = !hasExplicitSnapshots && snapshotStore?.loadSnapshots
+    ? await snapshotStore.loadSnapshots(country)
+    : [];
+  const effectivePreviousSnapshots = hasExplicitSnapshots ? previousSnapshots : storedSnapshots;
+  const report = await checkTravelDocumentSources({ country, previousSnapshots: effectivePreviousSnapshots, fetchText, checkedAt });
+
+  if (!snapshotStore?.saveSnapshots) {
+    return {
+      ...report,
+      persistence: { provider: 'none', saved: false }
+    };
+  }
+
+  try {
+    await snapshotStore.saveSnapshots(country, report.snapshots, report);
+    return {
+      ...report,
+      persistence: { provider: 'server-snapshot-store', saved: true }
+    };
+  } catch (error) {
+    return {
+      ...report,
+      persistence: { provider: 'server-snapshot-store', saved: false, error: error?.message || 'snapshot save failed' }
+    };
+  }
+}
+
 async function defaultFetchText(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);

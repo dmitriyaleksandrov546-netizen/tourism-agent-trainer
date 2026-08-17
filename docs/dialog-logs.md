@@ -34,6 +34,25 @@ create index if not exists dialog_logs_scenario_id_idx
 
 Do **not** expose the service role key in frontend code.
 
+## Travel document monitoring snapshots
+
+Daily Vercel cron jobs need a shared baseline, otherwise every run starts from an empty browser and cannot detect real day-to-day changes. Create this table too:
+
+```sql
+create table if not exists public.travel_document_snapshots (
+  country text primary key,
+  snapshots jsonb not null default '[]'::jsonb,
+  last_report jsonb,
+  checked_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists travel_document_snapshots_checked_at_idx
+  on public.travel_document_snapshots (checked_at desc);
+```
+
+The application upserts one row per country. Vercel cron calls `/api/travel-documents/monitor/<country>` every morning, loads the previous snapshots from Supabase, fetches official sources, compares fingerprints and saves the new baseline.
+
 ## Vercel env
 
 Add these variables in Vercel project settings:
@@ -42,6 +61,7 @@ Add these variables in Vercel project settings:
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>
 SUPABASE_DIALOG_LOGS_TABLE=dialog_logs
+SUPABASE_TRAVEL_DOCUMENT_SNAPSHOTS_TABLE=travel_document_snapshots
 ```
 
 Keep existing LLM variables:

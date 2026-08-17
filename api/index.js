@@ -2,7 +2,8 @@ import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from '../src/llmC
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from '../src/neuroclientPrompt.js';
 import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, isSelectionUrl, normalizeSelectionAnalysis, normalizeSelectionInput } from '../src/selectionAnalysis.js';
 import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs } from '../src/dialogLogStore.server.js';
-import { checkTravelDocumentSources } from '../src/travelDocumentMonitoring.js';
+import { checkTravelDocumentSourcesWithSnapshotStore } from '../src/travelDocumentMonitoring.js';
+import { getTravelDocumentSnapshotStoreStatus, travelDocumentSnapshotStore } from '../src/travelDocumentSnapshotStore.server.js';
 import { fetchTourvisorCartText } from '../src/tourvisorSelection.js';
 
 function sendJson(res, status, payload, extraHeaders = {}) {
@@ -114,8 +115,14 @@ export default async function handler(req, res) {
             : '';
     const country = body?.country || query.get('country') || pathCountry || 'Турция';
     try {
-      const report = await checkTravelDocumentSources({ country, previousSnapshots: body?.previousSnapshots || [] });
-      return sendJson(res, 200, report, headers);
+      const explicitSnapshots = Array.isArray(body?.previousSnapshots) ? body.previousSnapshots : undefined;
+      const storeStatus = getTravelDocumentSnapshotStoreStatus();
+      const report = await checkTravelDocumentSourcesWithSnapshotStore({
+        country,
+        previousSnapshots: explicitSnapshots,
+        snapshotStore: storeStatus.configured ? travelDocumentSnapshotStore : null
+      });
+      return sendJson(res, 200, { ...report, snapshotStore: storeStatus }, headers);
     } catch (error) {
       return sendJson(res, 500, { ok: false, country, error: error?.message || 'travel document monitoring failed' }, headers);
     }
