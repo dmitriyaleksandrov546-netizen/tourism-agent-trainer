@@ -184,9 +184,17 @@ export async function checkTravelDocumentSourcesWithSnapshotStore({
   checkedAt = new Date().toISOString()
 } = {}) {
   const hasExplicitSnapshots = Array.isArray(previousSnapshots) && previousSnapshots.length > 0;
-  const storedSnapshots = !hasExplicitSnapshots && snapshotStore?.loadSnapshots
-    ? await snapshotStore.loadSnapshots(country)
-    : [];
+  let storedSnapshots = [];
+  let loadError = '';
+
+  if (!hasExplicitSnapshots && snapshotStore?.loadSnapshots) {
+    try {
+      storedSnapshots = await snapshotStore.loadSnapshots(country);
+    } catch (error) {
+      loadError = error?.message || 'snapshot load failed';
+    }
+  }
+
   const effectivePreviousSnapshots = hasExplicitSnapshots ? previousSnapshots : storedSnapshots;
   const report = await checkTravelDocumentSources({ country, previousSnapshots: effectivePreviousSnapshots, fetchText, checkedAt });
 
@@ -194,6 +202,13 @@ export async function checkTravelDocumentSourcesWithSnapshotStore({
     return {
       ...report,
       persistence: { provider: 'none', saved: false }
+    };
+  }
+
+  if (loadError) {
+    return {
+      ...report,
+      persistence: { provider: 'server-snapshot-store', saved: false, error: loadError }
     };
   }
 
