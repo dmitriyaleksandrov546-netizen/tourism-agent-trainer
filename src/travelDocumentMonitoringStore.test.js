@@ -51,4 +51,31 @@ describe('travelDocumentMonitoring snapshot store integration', () => {
     expect(report.status).toBe('changes-detected');
     expect(report.changes[0].before).toContain('Manual old text');
   });
+
+  it('falls back to one-off monitoring when the server snapshot table is not ready', async () => {
+    const snapshotStore = {
+      async loadSnapshots() {
+        throw new Error('Could not find the table travel_document_snapshots');
+      },
+      async saveSnapshots() {
+        throw new Error('save should not be required when load failed');
+      }
+    };
+
+    const report = await checkTravelDocumentSourcesWithSnapshotStore({
+      country: 'Турция',
+      snapshotStore,
+      checkedAt: '2026-08-17T05:00:00.000Z',
+      fetchText: async () => '<h1>Baseline text</h1>'
+    });
+
+    expect(report.ok).toBe(true);
+    expect(report.status).toBe('baseline-created');
+    expect(report.persistence).toEqual({
+      provider: 'server-snapshot-store',
+      saved: false,
+      error: 'Could not find the table travel_document_snapshots'
+    });
+  });
+
 });
