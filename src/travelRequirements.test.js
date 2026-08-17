@@ -17,6 +17,7 @@ describe('travelRequirements', () => {
     expect(checklist.requiredDocuments.join(' ')).toContain('Обратный');
     expect(checklist.notRequired.join(' ')).toContain('Туристическая виза');
     expect(checklist.checkSeparately.join(' ')).toContain('Пересадка');
+    expect([...checklist.requiredDocuments, ...checklist.notRequired, ...checklist.checkSeparately].every((item) => item.length <= 65)).toBe(true);
     expect(checklist.managerPhrase.length).toBeLessThan(170);
     expect(checklist.checks.map((item) => item.text).join(' ')).toContain('Виза: не нужна');
   });

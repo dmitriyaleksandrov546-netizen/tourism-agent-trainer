@@ -382,19 +382,19 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
           ))}
         </ul>
         <div className="memoColumns">
-          <div>
+          <div className="memoSection">
             <h4>Нужно подготовить</h4>
-            <ul>{checklist.requiredDocuments.map((item) => <li key={item}>{item}</li>)}</ul>
+            <p>{checklist.requiredDocuments.join(' · ')}</p>
           </div>
           {!!checklist.notRequired.length && (
-            <div>
+            <div className="memoSection">
               <h4>Не нужно</h4>
-              <ul>{checklist.notRequired.map((item) => <li key={item}>{item}</li>)}</ul>
+              <p>{checklist.notRequired.join(' · ')}</p>
             </div>
           )}
-          <div>
+          <div className="memoSection">
             <h4>Проверить отдельно</h4>
-            <ul>{checklist.checkSeparately.map((item) => <li key={item}>{item}</li>)}</ul>
+            <p>{checklist.checkSeparately.join(' · ')}</p>
           </div>
         </div>
         <p className="managerPhrase"><b>Как сказать клиенту:</b> {checklist.managerPhrase}</p>
