@@ -103,7 +103,17 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
 .travelWarning { padding: 12px; border-radius: 14px; background: #fff5f3; color: #7a2c20; border: 1px solid rgba(199,70,53,.2); font-size: 13px; font-weight: 800; }
 .travelBlock { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fbfcfb; }
 .travelBlock h3 { margin: 0; font-size: 16px; }
-.travelBlock ol { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: #33443d; line-height: 1.35; }
+.travelBlock h4 { margin: 0 0 8px; font-size: 13px; color: var(--green-dark); text-transform: uppercase; letter-spacing: .03em; }
+.travelBlock ol, .travelBlock ul { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: #33443d; line-height: 1.35; }
+.readyMemo { background: #f7fbf8; border-color: rgba(11,132,99,.2); }
+.ruleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ruleGrid article { display: grid; gap: 4px; padding: 11px; border: 1px solid rgba(11,132,99,.16); border-radius: 14px; background: #fff; }
+.ruleGrid b { color: var(--green-dark); }
+.ruleGrid p { margin: 0; color: #2f4039; line-height: 1.35; }
+.memoColumns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.memoColumns > div { padding: 12px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.managerPhrase { margin: 0; padding: 12px; border-radius: 14px; background: #eaf7ef; color: var(--green-dark); line-height: 1.38; }
+@media (max-width: 820px) { .ruleGrid, .memoColumns { grid-template-columns: 1fr; } }
 .travelChecklistHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .travelChecklistHead span { border-radius: 999px; padding: 6px 10px; background: #e6f7ef; color: var(--green-dark); font-size: 12px; font-weight: 950; }
 .travelChecks { display: grid; gap: 8px; }
@@ -111,8 +121,12 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
 .travelChecks label.done { background: #effaf4; border-color: rgba(11,132,99,.26); color: var(--green-dark); }
 .travelChecks input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--green); }
 .resetMemo { justify-self: start; }
-.sources p { margin: 0; color: #33443d; line-height: 1.35; }
-.sources small { color: var(--muted); line-height: 1.35; }
+.sources p, .monitoringBlock p { margin: 0; color: #33443d; line-height: 1.35; }
+.sources small, .monitoringChanges small { color: var(--muted); line-height: 1.35; }
+.monitoringChanges, .sourceStatusList { display: grid; gap: 8px; }
+.monitoringChanges article { display: grid; gap: 5px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: #fff; }
+.monitoringChanges b { color: var(--ink); }
+.sourceStatusList { padding-top: 4px; }
 
 .tourvisionPage { display: grid; gap: 18px; }
 .tourvisionPanel { padding: 0; overflow: hidden; }

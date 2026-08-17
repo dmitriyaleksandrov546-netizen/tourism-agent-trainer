@@ -48,6 +48,25 @@ describe('selectionAnalysis', () => {
     expect(fallback.gaps.join(' ')).not.toContain('ссылка недоступна');
   });
 
+  it('uses fetched Tourvisor cart text in fallback instead of saying the link is unreadable', () => {
+    const fallback = createSelectionAnalysisFallback({
+      scenarioId: 'turkey-family-hard',
+      selectionInput: 'https://teg-tur.ru/podbor-tura#tvcartid=79128389',
+      fetchedText: [
+        'Источник: Tourvisor cart API',
+        'Тур: the nora hotels family club (ex. scylax family club)',
+        'Цена: 150 157 RUB',
+        'Рейтинг/оценка: 3.2',
+        'Отель: hedef resort hotel 5*'
+      ].join('\n')
+    });
+
+    expect(fallback.source).toBe('selection-analysis-fallback-tourvisor');
+    expect(fallback.clientReply).toContain('Подборку открыла');
+    expect(fallback.clientReply).toContain('the nora hotels family club');
+    expect(fallback.clientReply).not.toContain('не смогла открыть');
+  });
+
   it('detects a manager selection inside the normal chat message without a separate analysis block', () => {
     expect(shouldAnalyzeSelectionFromMessage('Вот подборка: https://example.com/tour подборка по Турции')).toBe(true);
     expect(shouldAnalyzeSelectionFromMessage('Отель Seven Seas Hotel Life 5*, Кемер, 310 000 ₽, отзывы 4.6/5')).toBe(true);

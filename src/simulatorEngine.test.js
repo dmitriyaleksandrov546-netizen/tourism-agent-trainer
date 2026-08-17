@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { corpusInsights, analyzeSelectionLink, evaluateAgentReply, getNextClientReply, getScenarioById } from './simulatorEngine.js';
+import { corpusInsights, analyzeSelectionLink, evaluateAgentReply, getNextClientReply, getScenarioById, shouldShowEvaluationReview } from './simulatorEngine.js';
 
 describe('simulatorEngine', () => {
   it('exposes corpus and methodic sources from calls, Wazzup and training materials', () => {
@@ -92,5 +92,22 @@ describe('simulatorEngine', () => {
     expect(strong.detected).toContain('selectionQuality');
     expect(strong.detected).toContain('reviewSources');
     expect(strong.detected).toContain('managerDecision');
+  });
+
+  it('hides answer review during greeting/small-talk and shows it only when the dialogue reaches business substance', () => {
+    const greetingOnly = [
+      { role: 'client', text: 'Здравствуйте. Вы туры подбираете?' },
+      { role: 'agent', text: 'Здравствуйте, да, меня зовут Иван. Как вас зовут?' },
+      { role: 'client', text: 'Анна. Хотим Турцию, пока просто понять варианты.' }
+    ];
+    const businessDialogue = [
+      ...greetingOnly,
+      { role: 'agent', text: 'Уточню возраст детей, бюджет и даты. Сегодня до 18:00 пришлю 2–3 варианта с плюсами, минусами и отзывами.' },
+      { role: 'client', text: 'Детям 2 и 11, бюджет до 180 000 ₽.' }
+    ];
+
+    expect(shouldShowEvaluationReview({ messages: greetingOnly, agentText: 'Здравствуйте, Анна.' })).toBe(false);
+    expect(shouldShowEvaluationReview({ messages: businessDialogue, agentText: businessDialogue[3].text })).toBe(true);
+    expect(shouldShowEvaluationReview({ phase: 'selection-review', messages: greetingOnly, agentText: 'Вот подборка: https://example.com/tour' })).toBe(true);
   });
 });
