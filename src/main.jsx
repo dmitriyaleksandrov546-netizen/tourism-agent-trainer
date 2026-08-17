@@ -77,7 +77,7 @@ function App() {
     setCheckedTravelItems({});
   };
 
-  const copyText = async (text, okText = 'Скопировано') => {
+  const copyText = async (text, okText = '') => {
     try {
       await navigator.clipboard.writeText(text);
       setCopyState(okText);
@@ -268,7 +268,7 @@ function App() {
             <p className="kicker">Тренажёр турагента</p>
             <h1>Ответьте клиенту. Получите короткий разбор.</h1>
           </div>
-          {lastEvaluation && <button className="linkButton" onClick={resetAttempt}>Заново</button>}
+          {lastEvaluation && <button className="linkButton iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>}
         </header>
 
         <section className="layout">
@@ -289,9 +289,9 @@ function App() {
               <div className="sectionHead">
                 <h2>2. Ответьте клиенту</h2>
                 <div className="headActions">
-                  <button className="ghost" onClick={openTravelMemo}>Памятка документов</button>
-                  <button className="ghost" onClick={copyDialogue}>Скопировать диалог</button>
-                  <button className="ghost" onClick={resetAttempt}>Заново</button>
+                  <button className="memoAction" onClick={openTravelMemo} title="Памятка документов" aria-label="Памятка документов"><span aria-hidden="true">!</span>Памятка</button>
+                  <button className="ghost iconOnly" onClick={copyDialogue} title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
+                  <button className="ghost iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>
                 </div>
               </div>
               {copyState && <p className="copyState">{copyState}</p>}
