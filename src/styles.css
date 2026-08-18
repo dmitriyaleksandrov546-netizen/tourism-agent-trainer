@@ -23,7 +23,7 @@ button { cursor: pointer; }
 
 .appShell { min-height: 100vh; display: flex; }
 .leftRail { position: sticky; top: 0; height: 100vh; width: 62px; flex: 0 0 62px; padding: 12px 8px; background: #0d241d; display: grid; align-content: start; gap: 10px; box-shadow: 10px 0 28px rgba(14, 35, 28, .16); z-index: 3; }
-.leftRail button { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: transparent; color: rgba(255,255,255,.72); font-size: 12px; font-weight: 950; letter-spacing: -.02em; }
+.leftRail button { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: transparent; color: rgba(255,255,255,.72); font-size: 22px; font-weight: 950; letter-spacing: -.02em; }
 .leftRail button.active { background: #e6f7ef; color: var(--green-dark); border-color: rgba(230,247,239,.48); }
 .appContent { width: min(1360px, 100%); margin: 0 auto; padding: 22px; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
@@ -135,7 +135,6 @@ textarea:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(11,132,9
 .sources p, .monitoringBlock p { margin: 0; color: #33443d; line-height: 1.35; }
 .sources small, .monitoringChanges small { color: var(--muted); line-height: 1.35; }
 .sourceTitleRow { display: flex; align-items: center; gap: 8px; }
-.monitoringStatus { margin-left: auto; border-radius: 999px; padding: 6px 10px; background: #e6f7ef; color: var(--green-dark); font-size: 12px; font-weight: 950; }
 .infoIcon { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #e6f7ef; color: var(--green-dark); font-size: 12px; font-weight: 950; cursor: help; }
 .infoIcon::after { content: attr(aria-label); position: absolute; z-index: 5; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: min(320px, 76vw); padding: 10px 12px; border-radius: 12px; background: #173229; color: #fff; font-size: 12px; font-weight: 650; line-height: 1.35; box-shadow: 0 14px 36px rgba(5,30,20,.2); opacity: 0; pointer-events: none; transition: opacity .15s ease; }
 .infoIcon:hover::after, .infoIcon:focus::after { opacity: 1; }

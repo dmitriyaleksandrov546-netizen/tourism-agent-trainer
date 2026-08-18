@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createInitialMessages, evaluateAgentReply, getScenarioById, scenarios, shouldShowEvaluationReview } from './simulatorEngine.js';
 import { requestNeuroclientReply } from './neuroclientApi.js';
@@ -8,6 +8,7 @@ import { buildTravelDocumentChecklist } from './travelRequirements.js';
 import { requestTravelDocumentMonitoring } from './travelDocumentMonitoringApi.js';
 import { shouldRenderAnswerReview, shouldRenderDailySourceControl, shouldRenderFreshSources } from './uiVisibility.js';
 import { buildFreshSourcesTooltip, buildIntegratedMemoRows, formatClientContext } from './travelMemoUi.js';
+import { CLIENT_REPLY_IDLE_DELAY_MS, shouldDelayClientReply } from './clientReplyDelay.js';
 import {
   clearDialogHistory,
   clearCurrentAttempt,
@@ -40,16 +41,32 @@ function App() {
   const [travelMonitoring, setTravelMonitoring] = useState(null);
   const [isMonitoringTravelDocs, setIsMonitoringTravelDocs] = useState(false);
   const [checkedTravelItems, setCheckedTravelItems] = useState(restoredAttempt?.checkedTravelItems || {});
+  const draftRef = useRef(draft);
+  const delayedClientTimerRef = useRef(null);
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
   const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
 
+  const clearDelayedClientReply = () => {
+    if (delayedClientTimerRef.current) {
+      clearTimeout(delayedClientTimerRef.current);
+      delayedClientTimerRef.current = null;
+    }
+  };
+
+  const updateDraft = (value) => {
+    setDraft(value);
+    draftRef.current = value;
+    if (value.trim()) clearDelayedClientReply();
+  };
+
   const selectScenario = (id) => {
     if (id === activeScenarioId) return;
+    clearDelayedClientReply();
     const savedAttempt = loadScenarioAttempt(id);
     setActiveScenarioId(id);
     setMessages(savedAttempt?.messages?.length ? savedAttempt.messages : createInitialMessages(id, Date.now()));
-    setDraft(savedAttempt?.draft || '');
+    updateDraft(savedAttempt?.draft || '');
     setLastEvaluation(savedAttempt?.lastEvaluation || null);
     setSelectionAnalysis(savedAttempt?.selectionAnalysis || null);
     setActivePhase(savedAttempt?.activePhase || 'dialogue');
@@ -62,10 +79,11 @@ function App() {
   };
 
   const resetAttempt = () => {
+    clearDelayedClientReply();
     clearCurrentAttempt();
     clearScenarioAttempt(activeScenarioId);
     setMessages(createInitialMessages(activeScenarioId, Date.now()));
-    setDraft('');
+    updateDraft('');
     setLastEvaluation(null);
     setSelectionAnalysis(null);
     setActivePhase('dialogue');
@@ -97,7 +115,7 @@ function App() {
   const openHistoryRecord = (record) => {
     setActiveScenarioId(record.scenarioId);
     setMessages(record.messages || []);
-    setDraft('');
+    updateDraft('');
     setLastEvaluation(record.score !== null ? { score: record.score, verdict: record.verdict, dimensions: [], topFixes: [] } : null);
     setCopyState('Диалог открыт из истории');
   };
@@ -147,9 +165,38 @@ function App() {
     });
   };
 
+  const scheduleClientReply = ({ thinkingId, nextMessages, text, turn, history, evaluation }) => {
+    clearDelayedClientReply();
+    delayedClientTimerRef.current = setTimeout(async () => {
+      delayedClientTimerRef.current = null;
+      if (draftRef.current.trim()) return;
+
+      const waitingMessages = [
+        ...nextMessages,
+        { id: thinkingId, role: 'client', text: '...', time: 'клиент думает' }
+      ];
+      setMessages(waitingMessages);
+      setIsSending(true);
+
+      try {
+        const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history, phase: activePhase, selectionAnalysis });
+        const finalMessages = waitingMessages.map((message) => (
+          message.id === thinkingId
+            ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
+            : message
+        ));
+        setMessages(finalMessages);
+        persistDialog(finalMessages, evaluation);
+      } finally {
+        setIsSending(false);
+      }
+    }, CLIENT_REPLY_IDLE_DELAY_MS);
+  };
+
   const sendReply = async () => {
     const text = draft.trim();
     if (!text || isSending) return;
+    clearDelayedClientReply();
 
     const isSelectionMessage = shouldAnalyzeSelectionFromMessage(text);
     const shouldShowReview = !isSelectionMessage && shouldShowEvaluationReview({ messages, agentText: text, phase: activePhase });
@@ -158,14 +205,13 @@ function App() {
     const thinkingId = `client-thinking-${Date.now()}`;
     const nextMessages = [
       ...messages,
-      { id: `agent-${messages.length}`, role: 'agent', text, time: isSelectionMessage ? 'подборка от менеджера' : 'ваш ответ' },
-      { id: thinkingId, role: 'client', text: isSelectionMessage ? 'Изучаю подборку...' : '...', time: isSelectionMessage ? 'клиент изучает' : 'клиент думает' }
+      { id: `agent-${messages.length}`, role: 'agent', text, time: isSelectionMessage ? 'подборка от менеджера' : 'ваш ответ' }
     ];
 
     setMessages(nextMessages);
     setLastEvaluation(evaluation);
-    setDraft('');
-    setIsSending(true);
+    updateDraft('');
+    setIsSending(isSelectionMessage);
 
     if (isSelectionMessage) {
       setCopyState('Клиент изучает подборку прямо в диалоге...');
@@ -173,22 +219,20 @@ function App() {
         const result = await requestSelectionAnalysis({ scenarioId: activeScenarioId, selectionInput: text });
         const analysis = result.analysis;
         const selectionWasAccessible = !result.fetchError;
-        const finalMessages = nextMessages.map((message) => (
-          message.id === thinkingId
-            ? { ...message, text: analysis.clientReply, time: selectionWasAccessible ? 'клиент изучил подборку' : 'клиент не смог открыть ссылку' }
-            : message
-        ));
+        const finalMessages = [
+          ...nextMessages,
+          { id: thinkingId, role: 'client', text: analysis.clientReply, time: selectionWasAccessible ? 'клиент изучил подборку' : 'клиент не смог открыть ссылку' }
+        ];
         setSelectionAnalysis(analysis);
         setActivePhase('selection-review');
         setMessages(finalMessages);
         setCopyState(selectionWasAccessible ? 'Подборка разобрана в диалоге' : 'Ссылка не открылась — клиент попросил доступный текст/скрин.');
         persistDialog(finalMessages, null);
       } catch (error) {
-        const finalMessages = nextMessages.map((message) => (
-          message.id === thinkingId
-            ? { ...message, text: 'Я не смогла открыть или прочитать подборку. Пришлите текст, скрин или названия отелей — тогда смогу оценить нормально.', time: 'ошибка анализа' }
-            : message
-        ));
+        const finalMessages = [
+          ...nextMessages,
+          { id: thinkingId, role: 'client', text: 'Я не смогла открыть или прочитать подборку. Пришлите текст, скрин или названия отелей — тогда смогу оценить нормально.', time: 'ошибка анализа' }
+        ];
         setMessages(finalMessages);
         setCopyState('Не удалось открыть подборку автоматически — клиент попросил текст, скрин или названия отелей.');
         persistDialog(finalMessages, null);
@@ -198,15 +242,10 @@ function App() {
       return;
     }
 
-    const reply = await requestNeuroclientReply({ scenarioId: activeScenarioId, agentText: text, turn, history: messages, phase: activePhase, selectionAnalysis });
-    const finalMessages = nextMessages.map((message) => (
-      message.id === thinkingId
-        ? { ...message, text: reply.text, time: reply.source === 'openai' ? 'AI-клиент' : 'ответ клиента' }
-        : message
-    ));
-    setMessages(finalMessages);
-    persistDialog(finalMessages, evaluation);
-    setIsSending(false);
+    if (shouldDelayClientReply({ isSelectionMessage })) {
+      persistDialog(nextMessages, evaluation);
+      scheduleClientReply({ thinkingId, nextMessages, text, turn, history: messages, evaluation });
+    }
   };
 
   useEffect(() => {
@@ -222,6 +261,8 @@ function App() {
     });
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => () => clearDelayedClientReply(), []);
 
   useEffect(() => {
     saveScenarioAttempt({
@@ -258,7 +299,7 @@ function App() {
           title="Тренажёр"
           aria-label="Тренажёр"
         >
-          <span>ТР</span>
+          <span aria-hidden="true">▤</span>
         </button>
       </aside>
 
@@ -315,7 +356,7 @@ function App() {
               <label className="answerBox" aria-label="Сообщение менеджера">
                 <textarea
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => updateDraft(event.target.value)}
                   placeholder="Сообщение клиенту. Можно вставить ссылку или текст подборки — клиент разберёт её прямо в диалоге."
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
@@ -408,8 +449,7 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
       {shouldRenderFreshSources(checklist) && (
         <section className="travelBlock sources monitoringBlock">
           <div className="sourceTitleRow">
-            <h3>Источники для свежей проверки</h3>
-            <span className="monitoringStatus">{isMonitoring ? 'проверка' : monitoring?.status || 'ожидает'}</span>
+            <h3>Актуализация официальных данных</h3>
             <span className="infoIcon" tabIndex="0" aria-label={freshSourcesTooltip} title={freshSourcesTooltip}>i</span>
           </div>
           <p>{isMonitoring ? 'Сверяю источники...' : monitoring?.changes?.length ? monitoring.managerSummary : 'Изменений не найдено.'}</p>
@@ -434,7 +474,7 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
           <p>• Периодичность: каждый день</p>
           <p>• Что сверяем: {checklist.dailyMonitoring.scope}</p>
           <p>• Что получает менеджер: {checklist.dailyMonitoring.managerOutcome}</p>
-          <h3>Источники для свежей проверки</h3>
+          <h3>Актуализация официальных данных</h3>
           {checklist.sourceNotes.map((source) => <p key={source}>• {source}</p>)}
           <small>{checklist.sourcePolicy}</small>
         </section>
