@@ -23,6 +23,16 @@ import {
   upsertDialogRecord
 } from './dialogHistoryStore.js';
 import { deleteServerDialogRecord, fetchServerDialogHistory, saveServerDialogRecord } from './dialogHistoryApi.js';
+import {
+  buildAdminSummary,
+  createTrainingAccount,
+  getActiveTrainingAccount,
+  loadActiveTrainingAccountId,
+  loadTrainingAccounts,
+  setActiveTrainingAccount,
+  touchTrainingAccount
+} from './adminStore.js';
+import { pathForView, viewFromPath } from './adminNavigation.js';
 import './styles.css';
 
 function App() {
@@ -37,6 +47,12 @@ function App() {
   const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
+  const [activeView, setActiveViewState] = useState(() => viewFromPath(window.location.pathname));
+  const [adminAccounts, setAdminAccounts] = useState(() => loadTrainingAccounts());
+  const [activeAccountId, setActiveAccountId] = useState(() => loadActiveTrainingAccountId());
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountRole, setNewAccountRole] = useState('Агент');
+  const [adminNotice, setAdminNotice] = useState('');
   const [isTravelMemoOpen, setIsTravelMemoOpen] = useState(false);
   const [travelMonitoring, setTravelMonitoring] = useState(null);
   const [isMonitoringTravelDocs, setIsMonitoringTravelDocs] = useState(false);
@@ -46,6 +62,16 @@ function App() {
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
   const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
+  const activeAccount = useMemo(() => (
+    adminAccounts.find((account) => account.id === activeAccountId) || getActiveTrainingAccount(adminAccounts)
+  ), [adminAccounts, activeAccountId]);
+  const adminSummary = useMemo(() => buildAdminSummary(dialogHistory, adminAccounts), [dialogHistory, adminAccounts]);
+
+  const setActiveView = (view) => {
+    setActiveViewState(view);
+    const path = pathForView(view);
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+  };
 
   const clearDelayedClientReply = () => {
     if (delayedClientTimerRef.current) {
@@ -105,7 +131,7 @@ function App() {
   };
 
   const copyDialogue = async () => {
-    const record = createDialogRecord({ scenario: activeScenario, messages, evaluation: lastEvaluation });
+    const record = createDialogRecord({ scenario: activeScenario, messages, evaluation: lastEvaluation, account: activeAccount });
     const text = formatDialogRecord({ ...record, messages: draft.trim() ? [...messages, { role: 'agent', text: draft.trim() }] : messages });
     await copyText(text);
   };
@@ -152,9 +178,41 @@ function App() {
     setCopyState('История очищена');
   };
 
+  const selectTrainingAccount = (accountId) => {
+    setActiveTrainingAccount(accountId);
+    setActiveAccountId(accountId);
+    setAdminNotice('Аккаунт выбран для следующего прохождения');
+  };
+
+  const addTrainingAccount = (event) => {
+    event.preventDefault();
+    const result = createTrainingAccount({ name: newAccountName, role: newAccountRole });
+    setAdminAccounts(result.accounts);
+    if (result.ok) {
+      setActiveAccountId(result.account.id);
+      setNewAccountName('');
+      setAdminNotice(`Создан аккаунт: ${result.account.name}`);
+    } else {
+      setAdminNotice(result.error);
+    }
+  };
+
+  const refreshAdminData = () => {
+    setDialogHistory(loadDialogHistory());
+    setAdminAccounts(loadTrainingAccounts());
+    fetchServerDialogHistory().then((history) => {
+      if (history.ok) {
+        setHistoryMode('supabase');
+        setDialogHistory(history.records);
+      }
+    });
+    setAdminNotice('Данные обновлены');
+  };
+
   const persistDialog = (finalMessages, evaluation = null) => {
-    const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation });
+    const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation, account: activeAccount });
     setDialogHistory(upsertDialogRecord(record));
+    if (activeAccount?.id) setAdminAccounts(touchTrainingAccount(activeAccount.id));
     saveServerDialogRecord(record).then((result) => {
       if (result.ok) {
         setHistoryMode('supabase');
@@ -265,6 +323,12 @@ function App() {
   useEffect(() => () => clearDelayedClientReply(), []);
 
   useEffect(() => {
+    const syncViewFromPath = () => setActiveViewState(viewFromPath(window.location.pathname));
+    window.addEventListener('popstate', syncViewFromPath);
+    return () => window.removeEventListener('popstate', syncViewFromPath);
+  }, []);
+
+  useEffect(() => {
     saveScenarioAttempt({
       scenarioId: activeScenarioId,
       messages,
@@ -294,95 +358,243 @@ function App() {
     <main className="appShell">
       <aside className="leftRail" aria-label="Главное меню">
         <button
-          className="active"
+          className={activeView === 'trainer' ? 'active' : ''}
           type="button"
           title="Тренажёр"
           aria-label="Тренажёр"
+          onClick={() => setActiveView('trainer')}
         >
           <span aria-hidden="true">▤</span>
+        </button>
+        <button
+          className={activeView === 'admin' ? 'active' : ''}
+          type="button"
+          title="Админка"
+          aria-label="Админка"
+          onClick={() => setActiveView('admin')}
+        >
+          <span aria-hidden="true">☷</span>
         </button>
       </aside>
 
       <section className="appContent">
-        <header className="top">
-          <div>
-            <p className="kicker">Тренажёр турагента</p>
-            <h1>Ответьте клиенту. Получите короткий разбор.</h1>
-          </div>
-          {lastEvaluation && <button className="linkButton iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>}
-        </header>
-
-        <section className="layout">
-            <section className="card situations">
-              <h2>Ситуации</h2>
-              <div className="situationList">
-                {scenarios.map((scenario, index) => (
-                  <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
-                    <small>Уровень {index + 1} · {scenario.level}</small>
-                    <b>{scenario.shortTitle}</b>
-                    <span>{scenario.shortSubtitle}</span>
-                  </button>
-                ))}
+        {activeView === 'admin' ? (
+          <AdminDashboard
+            accounts={adminAccounts}
+            activeAccountId={activeAccount?.id || ''}
+            summary={adminSummary}
+            records={dialogHistory}
+            mode={historyMode}
+            notice={adminNotice}
+            newAccountName={newAccountName}
+            newAccountRole={newAccountRole}
+            onAccountNameChange={setNewAccountName}
+            onAccountRoleChange={setNewAccountRole}
+            onCreateAccount={addTrainingAccount}
+            onSelectAccount={selectTrainingAccount}
+            onRefresh={refreshAdminData}
+            onOpenRecord={openHistoryRecord}
+            onCopyRecord={copyHistoryRecord}
+            onDeleteRecord={deleteHistoryRecord}
+            onClearRecords={clearHistory}
+          />
+        ) : (
+          <>
+            <header className="top">
+              <div>
+                <p className="kicker">Тренажёр турагента</p>
+                <h1>Ответьте клиенту. Получите короткий разбор.</h1>
+                <p className="activeAccountBadge">Аккаунт: <b>{activeAccount?.name || 'не выбран'}</b></p>
               </div>
-            </section>
+              {lastEvaluation && <button className="linkButton iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>}
+            </header>
 
-            <section className="card trainer">
-              <div className="sectionHead">
-                <h2>2. Ответьте клиенту</h2>
-                <div className="headActions">
-                  <button className="memoAction" onClick={openTravelMemo} title="Памятка документов" aria-label="Памятка документов"><span aria-hidden="true">!</span>Памятка</button>
-                  <button className="ghost iconOnly" onClick={copyDialogue} title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
-                  <button className="ghost iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>
-                </div>
-              </div>
-              {copyState && <p className="copyState">{copyState}</p>}
+            <section className="layout">
+                <section className="card situations">
+                  <h2>Ситуации</h2>
+                  <div className="situationList">
+                    {scenarios.map((scenario, index) => (
+                      <button key={scenario.id} className={scenario.id === activeScenarioId ? 'active' : ''} onClick={() => selectScenario(scenario.id)}>
+                        <small>Уровень {index + 1} · {scenario.level}</small>
+                        <b>{scenario.shortTitle}</b>
+                        <span>{scenario.shortSubtitle}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
 
-              {activeScenario.simulatedToday && (
-                <div className="simulatedDate" aria-label="Текущая дата в сценарии">
-                  <b>Текущая дата: {activeScenario.simulatedToday.label}</b>
-                </div>
-              )}
+                <section className="card trainer">
+                  <div className="sectionHead">
+                    <h2>2. Ответьте клиенту</h2>
+                    <div className="headActions">
+                      <button className="memoAction" onClick={openTravelMemo} title="Памятка документов" aria-label="Памятка документов"><span aria-hidden="true">!</span>Памятка</button>
+                      <button className="ghost iconOnly" onClick={copyDialogue} title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
+                      <button className="ghost iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>
+                    </div>
+                  </div>
+                  {copyState && <p className="copyState">{copyState}</p>}
 
-              <div className="dialogWindow" aria-label="Диалог с клиентом">
-                {messages.map((message) => (
-                  <article key={message.id} className={`dialogMessage ${message.role}`}>
-                    <span>{message.role === 'client' ? 'Клиент' : 'Вы'}</span>
-                    <p>{message.text}</p>
-                    <small>{message.time}</small>
-                  </article>
-                ))}
-              </div>
+                  {activeScenario.simulatedToday && (
+                    <div className="simulatedDate" aria-label="Текущая дата в сценарии">
+                      <b>Текущая дата: {activeScenario.simulatedToday.label}</b>
+                    </div>
+                  )}
 
-              <label className="answerBox" aria-label="Сообщение менеджера">
-                <textarea
-                  value={draft}
-                  onChange={(event) => updateDraft(event.target.value)}
-                  placeholder="Сообщение клиенту. Можно вставить ссылку или текст подборки — клиент разберёт её прямо в диалоге."
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      sendReply();
-                    }
-                  }}
-                />
-              </label>
+                  <div className="dialogWindow" aria-label="Диалог с клиентом">
+                    {messages.map((message) => (
+                      <article key={message.id} className={`dialogMessage ${message.role}`}>
+                        <span>{message.role === 'client' ? 'Клиент' : 'Вы'}</span>
+                        <p>{message.text}</p>
+                        <small>{message.time}</small>
+                      </article>
+                    ))}
+                  </div>
 
-              <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Отправляю...' : 'Отправить'}</button>
+                  <label className="answerBox" aria-label="Сообщение менеджера">
+                    <textarea
+                      value={draft}
+                      onChange={(event) => updateDraft(event.target.value)}
+                      placeholder="Сообщение клиенту. Можно вставить ссылку или текст подборки — клиент разберёт её прямо в диалоге."
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          sendReply();
+                        }
+                      }}
+                    />
+                  </label>
 
-              {shouldRenderAnswerReview(lastEvaluation) && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
-              <TravelRequirementsDrawer
-                checklist={travelChecklist}
-                checkedItems={checkedTravelItems}
-                isOpen={isTravelMemoOpen}
-                monitoring={travelMonitoring}
-                isMonitoring={isMonitoringTravelDocs}
-                onClose={() => setIsTravelMemoOpen(false)}
-                onToggle={toggleTravelItem}
-              />
-            </section>
-          </section>
+                  <button className="primary" onClick={sendReply} disabled={isSending}>{isSending ? 'Отправляю...' : 'Отправить'}</button>
+
+                  {shouldRenderAnswerReview(lastEvaluation) && <Review evaluation={lastEvaluation} scenario={activeScenario} />}
+                  <TravelRequirementsDrawer
+                    checklist={travelChecklist}
+                    checkedItems={checkedTravelItems}
+                    isOpen={isTravelMemoOpen}
+                    monitoring={travelMonitoring}
+                    isMonitoring={isMonitoringTravelDocs}
+                    onClose={() => setIsTravelMemoOpen(false)}
+                    onToggle={toggleTravelItem}
+                  />
+                </section>
+              </section>
+          </>
+        )}
       </section>
     </main>
+  );
+}
+
+function AdminDashboard({
+  accounts,
+  activeAccountId,
+  summary,
+  records,
+  mode,
+  notice,
+  newAccountName,
+  newAccountRole,
+  onAccountNameChange,
+  onAccountRoleChange,
+  onCreateAccount,
+  onSelectAccount,
+  onRefresh,
+  onOpenRecord,
+  onCopyRecord,
+  onDeleteRecord,
+  onClearRecords
+}) {
+  return (
+    <section className="adminPage">
+      <header className="top adminTop">
+        <div>
+          <p className="kicker">Админка T-TRAINER</p>
+          <h1>Аккаунты, прохождения и слабые места менеджеров</h1>
+          <p className="adminHint">Создайте аккаунт, выберите его активным — следующие прохождения будут привязаны к нему.</p>
+        </div>
+        <button type="button" className="ghost refreshButton" onClick={onRefresh}>Обновить</button>
+      </header>
+
+      {notice && <p className="copyState adminNotice">{notice}</p>}
+
+      <section className="adminStats">
+        <article><span>Аккаунтов</span><b>{summary.accountCount}</b></article>
+        <article><span>Прохождений</span><b>{summary.attempts}</b></article>
+        <article><span>С оценкой</span><b>{summary.completed}</b></article>
+        <article><span>Средний балл</span><b>{summary.averageScore ?? '—'}</b></article>
+      </section>
+
+      <section className="adminGrid">
+        <section className="card adminCard">
+          <div className="historyHead">
+            <h2>Аккаунты</h2>
+          </div>
+          <form className="accountForm" onSubmit={onCreateAccount}>
+            <input
+              value={newAccountName}
+              onChange={(event) => onAccountNameChange(event.target.value)}
+              placeholder="Имя менеджера"
+              aria-label="Имя менеджера"
+            />
+            <select value={newAccountRole} onChange={(event) => onAccountRoleChange(event.target.value)} aria-label="Роль">
+              <option>Агент</option>
+              <option>Стажёр</option>
+              <option>Кандидат</option>
+              <option>Менеджер</option>
+            </select>
+            <button type="submit" className="primary compactPrimary">Создать</button>
+          </form>
+
+          {!accounts.length ? (
+            <p className="emptyHistory">Пока нет аккаунтов. Создайте менеджера, чтобы видеть персональную статистику.</p>
+          ) : (
+            <div className="accountList">
+              {summary.analytics.map((row) => (
+                <button
+                  type="button"
+                  key={row.account.id || 'unassigned'}
+                  className={row.account.id === activeAccountId ? 'active' : ''}
+                  onClick={() => row.account.id && onSelectAccount(row.account.id)}
+                  disabled={!row.account.id}
+                >
+                  <b>{row.account.name}</b>
+                  <span>{row.account.role || '—'} · {row.attempts} прохожд. · средний {row.averageScore ?? '—'}</span>
+                  <small>{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString('ru-RU') : 'ещё не проходил'}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="card adminCard">
+          <h2>Контроль действий</h2>
+          <div className="analyticsTable">
+            <div className="analyticsHeader">
+              <span>Аккаунт</span><span>Попытки</span><span>Средний</span><span>Слабые сценарии</span>
+            </div>
+            {summary.analytics.length ? summary.analytics.map((row) => (
+              <div className="analyticsRow" key={row.account.id || 'unassigned-row'}>
+                <b>{row.account.name}</b>
+                <span>{row.attempts}</span>
+                <span>{row.averageScore ?? '—'}</span>
+                <span>{row.weakScenarios.length ? row.weakScenarios.join(', ') : row.topScenario}</span>
+              </div>
+            )) : <p className="emptyHistory">Нет данных по прохождениям.</p>}
+          </div>
+        </section>
+      </section>
+
+      <section className="card adminCard">
+        <HistoryPanel
+          records={records}
+          mode={mode}
+          onOpen={onOpenRecord}
+          onCopy={onCopyRecord}
+          onDelete={onDeleteRecord}
+          onClear={onClearRecords}
+        />
+      </section>
+    </section>
   );
 }
 

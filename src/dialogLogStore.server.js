@@ -47,7 +47,7 @@ export async function listDialogLogs({ limit = 50 } = {}) {
   return requestSupabase(`?select=*&order=created_at.desc&limit=${encodeURIComponent(limit)}`);
 }
 
-export async function createDialogLog(record) {
+function buildDialogPayload(record, { includeAccount = true } = {}) {
   const payload = {
     scenario_id: record.scenarioId,
     scenario_title: record.scenarioTitle,
@@ -60,8 +60,24 @@ export async function createDialogLog(record) {
     last_client: record.lastClient,
     source: record.source || 'web'
   };
-  const rows = await requestSupabase('', { method: 'POST', body: payload });
-  return Array.isArray(rows) ? rows[0] : rows;
+  if (includeAccount) {
+    payload.account_id = record.accountId || '';
+    payload.account_name = record.accountName || 'Без аккаунта';
+    payload.account_role = record.accountRole || '';
+  }
+  return payload;
+}
+
+export async function createDialogLog(record) {
+  try {
+    const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record) });
+    return Array.isArray(rows) ? rows[0] : rows;
+  } catch (error) {
+    const accountColumnsMissing = error?.status === 400 && /account_/i.test(`${error.message || ''} ${JSON.stringify(error.details || {})}`);
+    if (!accountColumnsMissing) throw error;
+    const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record, { includeAccount: false }) });
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
 }
 
 export async function deleteDialogLog(id) {

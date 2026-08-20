@@ -51,6 +51,9 @@ function mapServerRecord(row = {}) {
     level: row.level,
     score: row.score,
     verdict: row.verdict,
+    accountId: row.account_id || row.accountId || '',
+    accountName: row.account_name || row.accountName || 'Без аккаунта',
+    accountRole: row.account_role || row.accountRole || '',
     messages: row.messages || [],
     lastAgent: row.last_agent || '',
     lastClient: row.last_client || ''

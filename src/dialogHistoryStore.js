@@ -26,7 +26,7 @@ export function saveDialogHistory(records = []) {
   return normalized;
 }
 
-export function createDialogRecord({ scenario, messages, evaluation }) {
+export function createDialogRecord({ scenario, messages, evaluation, account = null }) {
   const agentMessages = messages.filter((message) => message.role === 'agent');
   const clientMessages = messages.filter((message) => message.role === 'client');
   const lastAgent = agentMessages.at(-1)?.text || '';
@@ -41,6 +41,9 @@ export function createDialogRecord({ scenario, messages, evaluation }) {
     level: scenario.level,
     score: evaluation?.score ?? null,
     verdict: evaluation?.verdict || '',
+    accountId: account?.id || '',
+    accountName: account?.name || 'Без аккаунта',
+    accountRole: account?.role || '',
     messages,
     lastAgent,
     lastClient
@@ -139,6 +142,7 @@ export function formatDialogRecord(record) {
     `Сценарий: ${record.scenarioTitle} — ${record.scenarioSubtitle}`,
     `Уровень: ${record.level}`,
     record.createdAt ? `Дата: ${new Date(record.createdAt).toLocaleString('ru-RU')}` : '',
+    record.accountName ? `Аккаунт: ${record.accountName}${record.accountRole ? ` · ${record.accountRole}` : ''}` : '',
     record.score !== null ? `Балл: ${record.score}/100` : '',
     record.verdict ? `Вердикт: ${record.verdict}` : '',
     '',
