@@ -1,7 +1,7 @@
 import { callConfiguredLlm, getLlmConfig, getPublicLlmStatus } from '../src/llmClient.js';
 import { buildNeuroclientPrompt, containsAbuse, createFallbackReply, normalizeClientReply } from '../src/neuroclientPrompt.js';
 import { buildSelectionAnalysisPrompt, createSelectionAnalysisFallback, isSelectionUrl, normalizeSelectionAnalysis, normalizeSelectionInput } from '../src/selectionAnalysis.js';
-import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs } from '../src/dialogLogStore.server.js';
+import { createDialogLog, deleteDialogLog, getDialogLogStoreStatus, listDialogLogs, updateDialogLog } from '../src/dialogLogStore.server.js';
 import { checkTravelDocumentSourcesWithSnapshotStore } from '../src/travelDocumentMonitoring.js';
 import { getTravelDocumentSnapshotStoreStatus, travelDocumentSnapshotStore } from '../src/travelDocumentSnapshotStore.server.js';
 import { fetchTourvisorCartText } from '../src/tourvisorSelection.js';
@@ -142,7 +142,10 @@ export default async function handler(req, res) {
       let body;
       try {
         body = await readJsonBody(req);
-        const record = await createDialogLog(body?.record || body);
+        const payloadRecord = body?.record || body;
+        const record = body?.serverRecordId
+          ? await updateDialogLog(body.serverRecordId, payloadRecord)
+          : await createDialogLog(payloadRecord);
         return sendJson(res, 200, { ok: true, configured: true, record }, headers);
       } catch (error) {
         const notConfigured = error?.code === 'SUPABASE_NOT_CONFIGURED';

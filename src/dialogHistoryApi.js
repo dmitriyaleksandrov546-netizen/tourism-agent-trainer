@@ -12,12 +12,12 @@ export async function fetchServerDialogHistory() {
   }
 }
 
-export async function saveServerDialogRecord(record) {
+export async function saveServerDialogRecord(record, { serverRecordId = '' } = {}) {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ record })
+      body: JSON.stringify({ record, serverRecordId })
     });
     const data = await response.json();
     if (!response.ok || !data?.ok) return { ok: false, configured: Boolean(data?.configured), error: data?.error };
@@ -44,6 +44,7 @@ export async function deleteServerDialogRecord(id) {
 function mapServerRecord(row = {}) {
   return {
     id: row.id,
+    serverId: row.id,
     createdAt: row.created_at,
     scenarioId: row.scenario_id,
     scenarioTitle: row.scenario_title,
