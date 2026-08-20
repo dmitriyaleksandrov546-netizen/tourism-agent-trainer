@@ -187,7 +187,7 @@ function App() {
     setActiveTrainingAccount(accountId);
     setActiveAccountId(accountId);
     setSelectedHistoryRecord(null);
-    setAdminNotice('Аккаунт выбран. История ниже отфильтрована по нему.');
+    setAdminNotice('');
   };
 
   const addTrainingAccount = (event) => {
@@ -517,16 +517,12 @@ function AdminDashboard({
   const activeAccount = accounts.find((account) => account.id === activeAccountId);
   return (
     <section className="adminPage">
-      <header className="top adminTop">
+      <header className="top adminTop compactAdminTop">
         <div>
           <p className="kicker">Админка T-TRAINER</p>
-          <h1>Аккаунты и история прохождений</h1>
-          <p className="adminHint">Аккаунт admin уже создан и забирает всю старую историю. Введите логин admin + пароль, чтобы сохранить пароль для следующего шага входа.</p>
+          <h1>Аккаунты и история</h1>
         </div>
-        <button type="button" className="ghost refreshButton" onClick={onRefresh}>Обновить</button>
       </header>
-
-      {notice && <p className="copyState adminNotice">{notice}</p>}
 
       <section className="adminStats">
         <article><span>Аккаунтов</span><b>{summary.accountCount}</b></article>
@@ -720,7 +716,6 @@ function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelet
       <div className="historyHead">
         <h2>История тестов{activeAccount ? ` · ${activeAccount.login || activeAccount.name}` : ''}</h2>
       </div>
-      <p className="historyMode">Хранилище: {mode === 'supabase' ? 'Supabase база' : 'локально в этом браузере'}</p>
       {!activeAccount ? (
         <p className="emptyHistory">Выберите аккаунт слева — здесь появятся только его тесты.</p>
       ) : !records.length ? (
@@ -734,7 +729,6 @@ function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelet
                 <small>{new Date(record.createdAt).toLocaleString('ru-RU')} · {record.level}</small>
                 <b>{record.scenarioTitle}</b>
                 <span>{resume.resultLabel}</span>
-                <p>{resume.lastClient || resume.lastAgent}</p>
                 <div className="historyActions">
                   <button type="button" onClick={() => onInspect(record)}>Открыть лог</button>
                   <button type="button" onClick={() => onCopy(record)}>Копировать</button>
@@ -771,12 +765,10 @@ function DialogLogPanel({ record }) {
         <article><span>Ответов менеджера</span><b>{resume.turns}</b></article>
         <article><span>Сообщений клиента</span><b>{resume.clientMessages}</b></article>
       </div>
-      <div className="resumeBlock">
+      <div className="resumeBlock compactResumeBlock">
         <b>Итог</b>
         <p>{resume.verdict}</p>
       </div>
-      {resume.lastAgent && <div className="resumeBlock"><b>Последний ответ менеджера</b><p>{resume.lastAgent}</p></div>}
-      {resume.lastClient && <div className="resumeBlock"><b>Последняя реакция клиента</b><p>{resume.lastClient}</p></div>}
       <div className="dialogLogList">
         <h3>Полный лог</h3>
         {(record.messages || []).map((message, index) => (
