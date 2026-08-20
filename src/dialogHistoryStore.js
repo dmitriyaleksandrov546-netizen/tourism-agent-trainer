@@ -142,7 +142,6 @@ export function formatDialogRecord(record) {
     `Сценарий: ${record.scenarioTitle} — ${record.scenarioSubtitle}`,
     `Уровень: ${record.level}`,
     record.createdAt ? `Дата: ${new Date(record.createdAt).toLocaleString('ru-RU')}` : '',
-    record.accountName ? `Аккаунт: ${record.accountName}` : '',
     record.score !== null ? `Балл: ${record.score}/100` : '',
     record.verdict ? `Вердикт: ${record.verdict}` : '',
     '',
