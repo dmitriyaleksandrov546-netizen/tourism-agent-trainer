@@ -1,6 +1,7 @@
 const ACCOUNTS_KEY = 'ttrainer.adminAccounts.v1';
 const ACTIVE_ACCOUNT_KEY = 'ttrainer.activeAccountId.v1';
-const MAX_ACCOUNT_NAME_LENGTH = 48;
+const MAX_LOGIN_LENGTH = 48;
+const MAX_PASSWORD_LENGTH = 80;
 
 function canUseStorage() {
   return typeof window !== 'undefined' && Boolean(window.localStorage);
@@ -15,13 +16,22 @@ function safeParseArray(raw) {
   }
 }
 
+function normalizeLogin(value = '') {
+  return String(value || '').trim().slice(0, MAX_LOGIN_LENGTH);
+}
+
+function normalizePassword(value = '') {
+  return String(value || '').trim().slice(0, MAX_PASSWORD_LENGTH);
+}
+
 function normalizeAccount(account = {}) {
-  const name = String(account.name || '').trim().slice(0, MAX_ACCOUNT_NAME_LENGTH);
-  if (!name) return null;
+  const login = normalizeLogin(account.login || account.name);
+  if (!login) return null;
   return {
     id: account.id || `account-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    role: account.role || 'Агент',
+    login,
+    name: login,
+    password: normalizePassword(account.password),
     status: account.status || 'active',
     createdAt: account.createdAt || new Date().toISOString(),
     lastActiveAt: account.lastActiveAt || null
@@ -42,12 +52,13 @@ export function saveTrainingAccounts(accounts = []) {
   return normalized;
 }
 
-export function createTrainingAccount({ name, role = 'Агент' } = {}) {
+export function createTrainingAccount({ login, name, password } = {}) {
   const current = loadTrainingAccounts();
-  const account = normalizeAccount({ name, role });
-  if (!account) return { ok: false, error: 'Укажите имя аккаунта', accounts: current, account: null };
-  const duplicate = current.find((item) => item.name.toLowerCase() === account.name.toLowerCase());
-  if (duplicate) return { ok: false, error: 'Аккаунт с таким именем уже есть', accounts: current, account: duplicate };
+  const account = normalizeAccount({ login: login || name, password });
+  if (!account) return { ok: false, error: 'Укажите логин', accounts: current, account: null };
+  if (!account.password) return { ok: false, error: 'Укажите пароль', accounts: current, account: null };
+  const duplicate = current.find((item) => item.login.toLowerCase() === account.login.toLowerCase());
+  if (duplicate) return { ok: false, error: 'Аккаунт с таким логином уже есть', accounts: current, account: duplicate };
   const accounts = saveTrainingAccounts([account, ...current]);
   setActiveTrainingAccount(account.id);
   return { ok: true, accounts, account };
@@ -82,12 +93,35 @@ export function touchTrainingAccount(accountId) {
 }
 
 export function attachAccountToDialogRecord(record = {}, account = null) {
-  if (!account) return { ...record, accountId: '', accountName: 'Без аккаунта', accountRole: '' };
+  if (!account) return { ...record, accountId: '', accountName: 'Без аккаунта', accountLogin: '' };
   return {
     ...record,
     accountId: account.id,
-    accountName: account.name,
-    accountRole: account.role || 'Агент'
+    accountName: account.login || account.name,
+    accountLogin: account.login || account.name
+  };
+}
+
+export function filterRecordsByAccount(records = [], accountId = '') {
+  if (!accountId) return [];
+  return records.filter((record) => record.accountId === accountId);
+}
+
+export function buildTestResume(record = {}) {
+  const score = typeof record.score === 'number' ? record.score : null;
+  const verdict = record.verdict || (score === null ? 'Без финальной оценки' : score >= 80 ? 'Хорошо' : score >= 55 ? 'Нужно доработать' : 'Клиент может пропасть');
+  const agentMessages = (record.messages || []).filter((message) => message.role === 'agent');
+  const clientMessages = (record.messages || []).filter((message) => message.role === 'client');
+  return {
+    title: record.scenarioTitle || record.scenarioId || 'Сценарий',
+    account: record.accountLogin || record.accountName || 'Без аккаунта',
+    score,
+    verdict,
+    turns: agentMessages.length,
+    clientMessages: clientMessages.length,
+    lastAgent: record.lastAgent || agentMessages.at(-1)?.text || '',
+    lastClient: record.lastClient || clientMessages.at(-1)?.text || '',
+    resultLabel: score === null ? 'Без оценки' : `${score}/100 · ${verdict}`
   };
 }
 
@@ -104,23 +138,15 @@ export function buildAccountAnalytics(records = [], accounts = []) {
     scenarioCounts: {}
   }));
   const rowById = new Map(rows.map((row) => [row.account.id, row]));
-  const unassigned = {
-    account: { id: '', name: 'Без аккаунта', role: '', status: 'system' },
-    attempts: 0,
-    completed: 0,
-    averageScore: null,
-    bestScore: null,
-    lastActivityAt: null,
-    weakScenarios: [],
-    scenarioCounts: {}
-  };
   const scoreBuckets = new Map();
 
   for (const record of records) {
     const id = record.accountId || '';
-    let row = id ? rowById.get(id) : unassigned;
-    if (!row && id) {
-      const account = accountMap.get(id) || { id, name: record.accountName || 'Удалённый аккаунт', role: record.accountRole || 'Агент', status: 'archived' };
+    if (!id) continue;
+    let row = rowById.get(id);
+    if (!row) {
+      const login = record.accountLogin || record.accountName || 'Удалённый аккаунт';
+      const account = accountMap.get(id) || { id, login, name: login, status: 'archived' };
       row = { account, attempts: 0, completed: 0, averageScore: null, bestScore: null, lastActivityAt: null, weakScenarios: [], scenarioCounts: {} };
       rowById.set(id, row);
       rows.push(row);
@@ -138,8 +164,6 @@ export function buildAccountAnalytics(records = [], accounts = []) {
     }
   }
 
-  if (unassigned.attempts > 0) rows.push(unassigned);
-
   return rows.map((row) => {
     const scores = scoreBuckets.get(row.account.id) || [];
     const topScenario = Object.entries(row.scenarioCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
@@ -152,12 +176,13 @@ export function buildAccountAnalytics(records = [], accounts = []) {
   }).sort((a, b) => (b.lastActivityAt || '').localeCompare(a.lastActivityAt || ''));
 }
 
-export function buildAdminSummary(records = [], accounts = []) {
+export function buildAdminSummary(records = [], accounts = [], accountId = '') {
+  const scopedRecords = accountId ? filterRecordsByAccount(records, accountId) : records.filter((record) => record.accountId);
   const analytics = buildAccountAnalytics(records, accounts);
-  const completedScores = records.map((record) => record.score).filter((score) => typeof score === 'number');
+  const completedScores = scopedRecords.map((record) => record.score).filter((score) => typeof score === 'number');
   return {
     accountCount: accounts.length,
-    attempts: records.length,
+    attempts: scopedRecords.length,
     completed: completedScores.length,
     averageScore: completedScores.length ? Math.round(completedScores.reduce((sum, score) => sum + score, 0) / completedScores.length) : null,
     activeToday: analytics.filter((row) => row.lastActivityAt && new Date(row.lastActivityAt).toDateString() === new Date().toDateString()).length,
