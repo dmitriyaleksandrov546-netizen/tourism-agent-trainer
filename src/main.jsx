@@ -383,6 +383,16 @@ function App() {
         >
           <span aria-hidden="true">☷</span>
         </button>
+        <div className="railSpacer" aria-hidden="true" />
+        <button
+          className="accountAvatarButton"
+          type="button"
+          title={activeAccount?.login || activeAccount?.name || 'Аккаунт'}
+          aria-label={`Аккаунт ${activeAccount?.login || activeAccount?.name || ''}`.trim()}
+          onClick={() => setActiveView('admin')}
+        >
+          {(activeAccount?.login || activeAccount?.name || '?').slice(0, 1).toUpperCase()}
+        </button>
       </aside>
 
       <section className="appContent">
@@ -413,7 +423,6 @@ function App() {
               <div>
                 <p className="kicker">Тренажёр турагента</p>
                 <h1>Ответьте клиенту. Получите короткий разбор.</h1>
-                <p className="activeAccountBadge">Аккаунт: <b>{activeAccount?.name || 'не выбран'}</b></p>
               </div>
               {lastEvaluation && <button className="linkButton iconOnly" onClick={resetAttempt} title="Заново" aria-label="Заново">↻</button>}
             </header>
@@ -725,14 +734,25 @@ function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelet
           {records.map((record) => {
             const resume = buildTestResume(record);
             return (
-              <article className="historyItem" key={record.id}>
+              <article
+                className="historyItem"
+                key={record.id}
+                role="button"
+                tabIndex="0"
+                onClick={() => onInspect(record)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onInspect(record);
+                  }
+                }}
+              >
                 <small>{new Date(record.createdAt).toLocaleString('ru-RU')} · {record.level}</small>
                 <b>{record.scenarioTitle}</b>
                 <span>{resume.resultLabel}</span>
                 <div className="historyActions">
-                  <button type="button" onClick={() => onInspect(record)}>Открыть лог</button>
-                  <button type="button" onClick={() => onCopy(record)}>Копировать</button>
-                  <button type="button" onClick={() => onDelete(record.id)}>Удалить</button>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); onCopy(record); }} onKeyDown={(event) => event.stopPropagation()} title="Копировать" aria-label="Копировать диалог">⧉</button>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); onDelete(record.id); }} onKeyDown={(event) => event.stopPropagation()} title="Удалить" aria-label="Удалить диалог">🗑</button>
                 </div>
               </article>
             );
@@ -747,8 +767,8 @@ function DialogLogPanel({ record }) {
   if (!record) {
     return (
       <section className="dialogLogPanel">
-        <h2>Резюме теста и лог</h2>
-        <p className="emptyHistory">Выберите диалог в истории — здесь будет резюме и полный лог прохождения.</p>
+        <h2>Резюме теста</h2>
+        <p className="emptyHistory">Выберите диалог в истории — здесь будет резюме и история диалога.</p>
       </section>
     );
   }
@@ -759,18 +779,12 @@ function DialogLogPanel({ record }) {
         <h2>Резюме теста</h2>
         <span className="scorePill">{resume.resultLabel}</span>
       </div>
-      <div className="resumeGrid">
-        <article><span>Аккаунт</span><b>{resume.account}</b></article>
-        <article><span>Сценарий</span><b>{resume.title}</b></article>
+      <div className="resumeGrid compactResumeGrid">
         <article><span>Ответов менеджера</span><b>{resume.turns}</b></article>
         <article><span>Сообщений клиента</span><b>{resume.clientMessages}</b></article>
       </div>
-      <div className="resumeBlock compactResumeBlock">
-        <b>Итог</b>
-        <p>{resume.verdict}</p>
-      </div>
-      <div className="dialogLogList">
-        <h3>Полный лог</h3>
+      <div className="dialogLogList messengerLogList">
+        <h3>История диалога</h3>
         {(record.messages || []).map((message, index) => (
           <article key={`${message.id || message.role}-${index}`} className={`logMessage ${message.role}`}>
             <span>{message.role === 'client' ? 'Клиент' : 'Менеджер'} · {message.time || '—'}</span>

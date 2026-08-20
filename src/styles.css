@@ -22,9 +22,11 @@ button, textarea, input, select { font: inherit; }
 button { cursor: pointer; }
 
 .appShell { min-height: 100vh; display: flex; }
-.leftRail { position: sticky; top: 0; height: 100vh; width: 62px; flex: 0 0 62px; padding: 12px 8px; background: #0d241d; display: grid; align-content: start; gap: 10px; box-shadow: 10px 0 28px rgba(14, 35, 28, .16); z-index: 3; }
+.leftRail { position: sticky; top: 0; height: 100vh; width: 62px; flex: 0 0 62px; padding: 12px 8px; background: #0d241d; display: grid; grid-template-rows: auto auto 1fr auto; align-content: stretch; gap: 10px; box-shadow: 10px 0 28px rgba(14, 35, 28, .16); z-index: 3; }
 .leftRail button { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: transparent; color: rgba(255,255,255,.72); font-size: 22px; font-weight: 950; letter-spacing: -.02em; }
 .leftRail button.active { background: #e6f7ef; color: var(--green-dark); border-color: rgba(230,247,239,.48); }
+.railSpacer { min-height: 1px; }
+.leftRail .accountAvatarButton { align-self: end; border-radius: 999px; background: #e6f7ef; color: var(--green-dark); border-color: rgba(230,247,239,.56); font-size: 18px; box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 .appContent { width: min(1360px, 100%); margin: 0 auto; padding: 22px; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
 .kicker { margin: 0 0 4px; color: var(--green-dark); font-size: 14px; font-weight: 900; }
@@ -49,13 +51,14 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .emptyHistory { margin: 0; color: var(--muted); line-height: 1.35; font-size: 13px; }
 .historyMode { display: none; }
 .historyList { display: grid; gap: 7px; }
-.historyItem { border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 9px 10px; }
+.historyItem { position: relative; border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 9px 56px 9px 10px; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.historyItem:hover, .historyItem:focus { border-color: rgba(11,132,99,.45); background: #fbfefc; outline: none; transform: translateY(-1px); }
 .historyItem small { display: block; margin-bottom: 4px; color: var(--green-dark); font-size: 10px; font-weight: 900; }
 .historyItem b { display: block; margin-bottom: 2px; font-size: 14px; line-height: 1.18; }
-.historyItem span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+.historyItem span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 0; }
 .historyItem p { display: none; }
-.historyActions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-.historyActions button { border: 1px solid var(--line); border-radius: 10px; background: #f8faf8; padding: 5px 8px; color: var(--green-dark); font-size: 11px; font-weight: 850; }
+.historyActions { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; flex-wrap: nowrap; margin-top: 0; }
+.historyActions button { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 8px; background: #f8faf8; padding: 0; color: var(--green-dark); font-size: 13px; font-weight: 850; line-height: 1; }
 .danger { color: var(--bad); }
 .activeAccountBadge { margin: 10px 0 0; display: inline-flex; gap: 5px; align-items: center; border-radius: 999px; padding: 7px 11px; background: #e6f7ef; color: var(--green-dark); font-size: 13px; font-weight: 800; }
 .adminPage { display: grid; gap: 10px; }
@@ -90,6 +93,7 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .dialogLogPanel { display: grid; gap: 9px; align-content: start; }
 .scorePill { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 8px; background: #e6f7ef; color: var(--green-dark); font-size: 11px; font-weight: 950; }
 .resumeGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.compactResumeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .resumeGrid article, .resumeBlock { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 8px 10px; }
 .resumeGrid span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; }
 .resumeGrid b { color: var(--ink); font-size: 14px; }
@@ -97,12 +101,15 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .compactResumeBlock { grid-template-columns: auto 1fr; align-items: baseline; gap: 8px; }
 .resumeBlock b { color: var(--green-dark); }
 .resumeBlock p { margin: 0; color: #33443d; line-height: 1.35; white-space: pre-wrap; }
-.dialogLogList { display: grid; gap: 7px; }
-.dialogLogList h3 { margin-top: 2px; font-size: 16px; }
-.logMessage { border: 1px solid var(--line); border-radius: 13px; padding: 9px 10px; background: #fff; }
-.logMessage.agent { background: #eef8f2; border-color: rgba(11,132,99,.2); }
-.logMessage span { display: block; margin-bottom: 4px; color: var(--green-dark); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
+.dialogLogList { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 18px; background: #f8faf8; padding: 12px; }
+.dialogLogList h3 { margin: 0 0 4px; font-size: 16px; }
+.logMessage { width: min(76%, 760px); border: 1px solid var(--line); border-radius: 18px; padding: 10px 12px; background: #fff; box-shadow: 0 8px 20px rgba(23, 44, 36, .05); }
+.logMessage.client { justify-self: start; border-top-left-radius: 6px; }
+.logMessage.agent { justify-self: end; background: var(--green); border-color: rgba(11,132,99,.2); color: #fff; border-top-right-radius: 6px; }
+.logMessage span { display: block; margin-bottom: 4px; color: var(--green-dark); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; opacity: .72; }
+.logMessage.agent span { color: #fff; }
 .logMessage p { margin: 0; color: #2f4039; line-height: 1.38; white-space: pre-wrap; font-size: 13px; }
+.logMessage.agent p { color: #fff; }
 
 .trainer { padding: 0; overflow: hidden; min-height: calc(100vh - 44px); }
 .sectionHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 18px 0; }
