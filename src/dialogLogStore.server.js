@@ -47,7 +47,7 @@ export async function listDialogLogs({ limit = 50 } = {}) {
   return requestSupabase(`?select=*&order=created_at.desc&limit=${encodeURIComponent(limit)}`);
 }
 
-function buildDialogPayload(record, { includeAccount = true } = {}) {
+function buildDialogPayload(record, { accountMode = 'login' } = {}) {
   const payload = {
     scenario_id: record.scenarioId,
     scenario_title: record.scenarioTitle,
@@ -60,10 +60,12 @@ function buildDialogPayload(record, { includeAccount = true } = {}) {
     last_client: record.lastClient,
     source: record.source || 'web'
   };
-  if (includeAccount) {
+  if (accountMode !== 'none') {
     payload.account_id = record.accountId || '';
-    payload.account_name = record.accountName || 'Без аккаунта';
-    payload.account_role = record.accountRole || '';
+    payload.account_name = record.accountName || record.accountLogin || 'Без аккаунта';
+  }
+  if (accountMode === 'login') {
+    payload.account_login = record.accountLogin || record.accountName || '';
   }
   return payload;
 }
@@ -73,9 +75,14 @@ export async function createDialogLog(record) {
     const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record) });
     return Array.isArray(rows) ? rows[0] : rows;
   } catch (error) {
+    const accountLoginMissing = error?.status === 400 && /account_login/i.test(`${error.message || ''} ${JSON.stringify(error.details || {})}`);
     const accountColumnsMissing = error?.status === 400 && /account_/i.test(`${error.message || ''} ${JSON.stringify(error.details || {})}`);
+    if (accountLoginMissing) {
+      const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record, { accountMode: 'legacy' }) });
+      return Array.isArray(rows) ? rows[0] : rows;
+    }
     if (!accountColumnsMissing) throw error;
-    const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record, { includeAccount: false }) });
+    const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record, { accountMode: 'none' }) });
     return Array.isArray(rows) ? rows[0] : rows;
   }
 }

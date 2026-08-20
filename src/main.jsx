@@ -25,7 +25,9 @@ import {
 import { deleteServerDialogRecord, fetchServerDialogHistory, saveServerDialogRecord } from './dialogHistoryApi.js';
 import {
   buildAdminSummary,
+  buildTestResume,
   createTrainingAccount,
+  filterRecordsByAccount,
   getActiveTrainingAccount,
   loadActiveTrainingAccountId,
   loadTrainingAccounts,
@@ -50,8 +52,9 @@ function App() {
   const [activeView, setActiveViewState] = useState(() => viewFromPath(window.location.pathname));
   const [adminAccounts, setAdminAccounts] = useState(() => loadTrainingAccounts());
   const [activeAccountId, setActiveAccountId] = useState(() => loadActiveTrainingAccountId());
-  const [newAccountName, setNewAccountName] = useState('');
-  const [newAccountRole, setNewAccountRole] = useState('Агент');
+  const [newAccountLogin, setNewAccountLogin] = useState('');
+  const [newAccountPassword, setNewAccountPassword] = useState('');
+  const [selectedHistoryRecord, setSelectedHistoryRecord] = useState(null);
   const [adminNotice, setAdminNotice] = useState('');
   const [isTravelMemoOpen, setIsTravelMemoOpen] = useState(false);
   const [travelMonitoring, setTravelMonitoring] = useState(null);
@@ -65,7 +68,8 @@ function App() {
   const activeAccount = useMemo(() => (
     adminAccounts.find((account) => account.id === activeAccountId) || getActiveTrainingAccount(adminAccounts)
   ), [adminAccounts, activeAccountId]);
-  const adminSummary = useMemo(() => buildAdminSummary(dialogHistory, adminAccounts), [dialogHistory, adminAccounts]);
+  const selectedAccountRecords = useMemo(() => filterRecordsByAccount(dialogHistory, activeAccount?.id || ''), [dialogHistory, activeAccount]);
+  const adminSummary = useMemo(() => buildAdminSummary(dialogHistory, adminAccounts, activeAccount?.id || ''), [dialogHistory, adminAccounts, activeAccount]);
 
   const setActiveView = (view) => {
     setActiveViewState(view);
@@ -181,17 +185,20 @@ function App() {
   const selectTrainingAccount = (accountId) => {
     setActiveTrainingAccount(accountId);
     setActiveAccountId(accountId);
-    setAdminNotice('Аккаунт выбран для следующего прохождения');
+    setSelectedHistoryRecord(null);
+    setAdminNotice('Аккаунт выбран. История ниже отфильтрована по нему.');
   };
 
   const addTrainingAccount = (event) => {
     event.preventDefault();
-    const result = createTrainingAccount({ name: newAccountName, role: newAccountRole });
+    const result = createTrainingAccount({ login: newAccountLogin, password: newAccountPassword });
     setAdminAccounts(result.accounts);
     if (result.ok) {
       setActiveAccountId(result.account.id);
-      setNewAccountName('');
-      setAdminNotice(`Создан аккаунт: ${result.account.name}`);
+      setSelectedHistoryRecord(null);
+      setNewAccountLogin('');
+      setNewAccountPassword('');
+      setAdminNotice(`Создан аккаунт: ${result.account.login}`);
     } else {
       setAdminNotice(result.error);
     }
@@ -383,17 +390,18 @@ function App() {
             accounts={adminAccounts}
             activeAccountId={activeAccount?.id || ''}
             summary={adminSummary}
-            records={dialogHistory}
+            records={selectedAccountRecords}
+            selectedRecord={selectedHistoryRecord}
             mode={historyMode}
             notice={adminNotice}
-            newAccountName={newAccountName}
-            newAccountRole={newAccountRole}
-            onAccountNameChange={setNewAccountName}
-            onAccountRoleChange={setNewAccountRole}
+            newAccountLogin={newAccountLogin}
+            newAccountPassword={newAccountPassword}
+            onAccountLoginChange={setNewAccountLogin}
+            onAccountPasswordChange={setNewAccountPassword}
             onCreateAccount={addTrainingAccount}
             onSelectAccount={selectTrainingAccount}
             onRefresh={refreshAdminData}
-            onOpenRecord={openHistoryRecord}
+            onInspectRecord={setSelectedHistoryRecord}
             onCopyRecord={copyHistoryRecord}
             onDeleteRecord={deleteHistoryRecord}
             onClearRecords={clearHistory}
@@ -490,27 +498,29 @@ function AdminDashboard({
   activeAccountId,
   summary,
   records,
+  selectedRecord,
   mode,
   notice,
-  newAccountName,
-  newAccountRole,
-  onAccountNameChange,
-  onAccountRoleChange,
+  newAccountLogin,
+  newAccountPassword,
+  onAccountLoginChange,
+  onAccountPasswordChange,
   onCreateAccount,
   onSelectAccount,
   onRefresh,
-  onOpenRecord,
+  onInspectRecord,
   onCopyRecord,
   onDeleteRecord,
   onClearRecords
 }) {
+  const activeAccount = accounts.find((account) => account.id === activeAccountId);
   return (
     <section className="adminPage">
       <header className="top adminTop">
         <div>
           <p className="kicker">Админка T-TRAINER</p>
-          <h1>Аккаунты, прохождения и слабые места менеджеров</h1>
-          <p className="adminHint">Создайте аккаунт, выберите его активным — следующие прохождения будут привязаны к нему.</p>
+          <h1>Аккаунты и история прохождений</h1>
+          <p className="adminHint">Создайте аккаунт по логину и паролю. Выберите аккаунт — ниже появится только его история тестов.</p>
         </div>
         <button type="button" className="ghost refreshButton" onClick={onRefresh}>Обновить</button>
       </header>
@@ -519,7 +529,7 @@ function AdminDashboard({
 
       <section className="adminStats">
         <article><span>Аккаунтов</span><b>{summary.accountCount}</b></article>
-        <article><span>Прохождений</span><b>{summary.attempts}</b></article>
+        <article><span>Прохождений аккаунта</span><b>{summary.attempts}</b></article>
         <article><span>С оценкой</span><b>{summary.completed}</b></article>
         <article><span>Средний балл</span><b>{summary.averageScore ?? '—'}</b></article>
       </section>
@@ -531,34 +541,36 @@ function AdminDashboard({
           </div>
           <form className="accountForm" onSubmit={onCreateAccount}>
             <input
-              value={newAccountName}
-              onChange={(event) => onAccountNameChange(event.target.value)}
-              placeholder="Имя менеджера"
-              aria-label="Имя менеджера"
+              value={newAccountLogin}
+              onChange={(event) => onAccountLoginChange(event.target.value)}
+              placeholder="Логин"
+              aria-label="Логин"
+              autoComplete="username"
             />
-            <select value={newAccountRole} onChange={(event) => onAccountRoleChange(event.target.value)} aria-label="Роль">
-              <option>Агент</option>
-              <option>Стажёр</option>
-              <option>Кандидат</option>
-              <option>Менеджер</option>
-            </select>
+            <input
+              value={newAccountPassword}
+              onChange={(event) => onAccountPasswordChange(event.target.value)}
+              placeholder="Пароль"
+              aria-label="Пароль"
+              type="password"
+              autoComplete="new-password"
+            />
             <button type="submit" className="primary compactPrimary">Создать</button>
           </form>
 
           {!accounts.length ? (
-            <p className="emptyHistory">Пока нет аккаунтов. Создайте менеджера, чтобы видеть персональную статистику.</p>
+            <p className="emptyHistory">Пока нет аккаунтов. Создайте логин и пароль для менеджера.</p>
           ) : (
             <div className="accountList">
               {summary.analytics.map((row) => (
                 <button
                   type="button"
-                  key={row.account.id || 'unassigned'}
+                  key={row.account.id}
                   className={row.account.id === activeAccountId ? 'active' : ''}
-                  onClick={() => row.account.id && onSelectAccount(row.account.id)}
-                  disabled={!row.account.id}
+                  onClick={() => onSelectAccount(row.account.id)}
                 >
-                  <b>{row.account.name}</b>
-                  <span>{row.account.role || '—'} · {row.attempts} прохожд. · средний {row.averageScore ?? '—'}</span>
+                  <b>{row.account.login || row.account.name}</b>
+                  <span>{row.attempts} прохожд. · средний {row.averageScore ?? '—'} · лучший {row.bestScore ?? '—'}</span>
                   <small>{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString('ru-RU') : 'ещё не проходил'}</small>
                 </button>
               ))}
@@ -567,32 +579,38 @@ function AdminDashboard({
         </section>
 
         <section className="card adminCard">
-          <h2>Контроль действий</h2>
+          <h2>Контроль действий{activeAccount ? ` · ${activeAccount.login || activeAccount.name}` : ''}</h2>
           <div className="analyticsTable">
             <div className="analyticsHeader">
-              <span>Аккаунт</span><span>Попытки</span><span>Средний</span><span>Слабые сценарии</span>
+              <span>Логин</span><span>Попытки</span><span>Средний</span><span>Слабые сценарии</span>
             </div>
-            {summary.analytics.length ? summary.analytics.map((row) => (
-              <div className="analyticsRow" key={row.account.id || 'unassigned-row'}>
-                <b>{row.account.name}</b>
+            {activeAccount ? summary.analytics.filter((row) => row.account.id === activeAccount.id).map((row) => (
+              <div className="analyticsRow" key={row.account.id}>
+                <b>{row.account.login || row.account.name}</b>
                 <span>{row.attempts}</span>
                 <span>{row.averageScore ?? '—'}</span>
                 <span>{row.weakScenarios.length ? row.weakScenarios.join(', ') : row.topScenario}</span>
               </div>
-            )) : <p className="emptyHistory">Нет данных по прохождениям.</p>}
+            )) : <p className="emptyHistory">Выберите аккаунт слева.</p>}
           </div>
         </section>
       </section>
 
-      <section className="card adminCard">
-        <HistoryPanel
-          records={records}
-          mode={mode}
-          onOpen={onOpenRecord}
-          onCopy={onCopyRecord}
-          onDelete={onDeleteRecord}
-          onClear={onClearRecords}
-        />
+      <section className="adminDetailGrid">
+        <section className="card adminCard">
+          <HistoryPanel
+            records={records}
+            mode={mode}
+            activeAccount={activeAccount}
+            onInspect={onInspectRecord}
+            onCopy={onCopyRecord}
+            onDelete={onDeleteRecord}
+            onClear={onClearRecords}
+          />
+        </section>
+        <section className="card adminCard">
+          <DialogLogPanel record={selectedRecord || records[0] || null} />
+        </section>
       </section>
     </section>
   );
@@ -695,33 +713,78 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
   );
 }
 
-function HistoryPanel({ records, mode, onOpen, onCopy, onDelete, onClear }) {
+function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelete, onClear }) {
   return (
     <section className="historyPanel">
       <div className="historyHead">
-        <h2>История тестов</h2>
-        {!!records.length && <button className="ghost danger" type="button" onClick={onClear}>Очистить</button>}
+        <h2>История тестов{activeAccount ? ` · ${activeAccount.login || activeAccount.name}` : ''}</h2>
       </div>
       <p className="historyMode">Хранилище: {mode === 'supabase' ? 'Supabase база' : 'локально в этом браузере'}</p>
-      {!records.length ? (
-        <p className="emptyHistory">Пока пусто. Пройдите диалог — он сохранится здесь автоматически.</p>
+      {!activeAccount ? (
+        <p className="emptyHistory">Выберите аккаунт слева — здесь появятся только его тесты.</p>
+      ) : !records.length ? (
+        <p className="emptyHistory">У выбранного аккаунта пока нет прохождений.</p>
       ) : (
         <div className="historyList">
-          {records.map((record) => (
-            <article className="historyItem" key={record.id}>
-              <small>{new Date(record.createdAt).toLocaleString('ru-RU')} · {record.level}</small>
-              <b>{record.scenarioTitle}</b>
-              <span>{record.score !== null ? `${record.score}/100 · ${record.verdict}` : 'без оценки'}</span>
-              <p>{record.lastClient || record.lastAgent}</p>
-              <div className="historyActions">
-                <button type="button" onClick={() => onOpen(record)}>Открыть</button>
-                <button type="button" onClick={() => onCopy(record)}>Копировать</button>
-                <button type="button" onClick={() => onDelete(record.id)}>Удалить</button>
-              </div>
-            </article>
-          ))}
+          {records.map((record) => {
+            const resume = buildTestResume(record);
+            return (
+              <article className="historyItem" key={record.id}>
+                <small>{new Date(record.createdAt).toLocaleString('ru-RU')} · {record.level}</small>
+                <b>{record.scenarioTitle}</b>
+                <span>{resume.resultLabel}</span>
+                <p>{resume.lastClient || resume.lastAgent}</p>
+                <div className="historyActions">
+                  <button type="button" onClick={() => onInspect(record)}>Открыть лог</button>
+                  <button type="button" onClick={() => onCopy(record)}>Копировать</button>
+                  <button type="button" onClick={() => onDelete(record.id)}>Удалить</button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
+    </section>
+  );
+}
+
+function DialogLogPanel({ record }) {
+  if (!record) {
+    return (
+      <section className="dialogLogPanel">
+        <h2>Резюме теста и лог</h2>
+        <p className="emptyHistory">Выберите диалог в истории — здесь будет резюме и полный лог прохождения.</p>
+      </section>
+    );
+  }
+  const resume = buildTestResume(record);
+  return (
+    <section className="dialogLogPanel">
+      <div className="historyHead">
+        <h2>Резюме теста</h2>
+        <span className="scorePill">{resume.resultLabel}</span>
+      </div>
+      <div className="resumeGrid">
+        <article><span>Аккаунт</span><b>{resume.account}</b></article>
+        <article><span>Сценарий</span><b>{resume.title}</b></article>
+        <article><span>Ответов менеджера</span><b>{resume.turns}</b></article>
+        <article><span>Сообщений клиента</span><b>{resume.clientMessages}</b></article>
+      </div>
+      <div className="resumeBlock">
+        <b>Итог</b>
+        <p>{resume.verdict}</p>
+      </div>
+      {resume.lastAgent && <div className="resumeBlock"><b>Последний ответ менеджера</b><p>{resume.lastAgent}</p></div>}
+      {resume.lastClient && <div className="resumeBlock"><b>Последняя реакция клиента</b><p>{resume.lastClient}</p></div>}
+      <div className="dialogLogList">
+        <h3>Полный лог</h3>
+        {(record.messages || []).map((message, index) => (
+          <article key={`${message.id || message.role}-${index}`} className={`logMessage ${message.role}`}>
+            <span>{message.role === 'client' ? 'Клиент' : 'Менеджер'} · {message.time || '—'}</span>
+            <p>{message.text}</p>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
