@@ -2,6 +2,16 @@ const ACCOUNTS_KEY = 'ttrainer.adminAccounts.v1';
 const ACTIVE_ACCOUNT_KEY = 'ttrainer.activeAccountId.v1';
 const MAX_LOGIN_LENGTH = 48;
 const MAX_PASSWORD_LENGTH = 80;
+export const DEFAULT_ADMIN_ACCOUNT = {
+  id: 'admin-default',
+  login: 'admin',
+  name: 'admin',
+  password: '',
+  status: 'active',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastActiveAt: null,
+  isDefault: true
+};
 
 function canUseStorage() {
   return typeof window !== 'undefined' && Boolean(window.localStorage);
@@ -34,22 +44,29 @@ function normalizeAccount(account = {}) {
     password: normalizePassword(account.password),
     status: account.status || 'active',
     createdAt: account.createdAt || new Date().toISOString(),
-    lastActiveAt: account.lastActiveAt || null
+    lastActiveAt: account.lastActiveAt || null,
+    isDefault: Boolean(account.isDefault)
   };
 }
 
 export function loadTrainingAccounts() {
-  if (!canUseStorage()) return [];
-  return safeParseArray(window.localStorage.getItem(ACCOUNTS_KEY))
+  if (!canUseStorage()) return [DEFAULT_ADMIN_ACCOUNT];
+  const stored = safeParseArray(window.localStorage.getItem(ACCOUNTS_KEY))
     .map(normalizeAccount)
     .filter(Boolean);
+  const hasAdmin = stored.some((account) => account.id === DEFAULT_ADMIN_ACCOUNT.id || account.login.toLowerCase() === DEFAULT_ADMIN_ACCOUNT.login);
+  const accounts = hasAdmin ? stored : [DEFAULT_ADMIN_ACCOUNT, ...stored];
+  if (!hasAdmin) window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  return accounts;
 }
 
 export function saveTrainingAccounts(accounts = []) {
-  if (!canUseStorage()) return [];
+  if (!canUseStorage()) return [DEFAULT_ADMIN_ACCOUNT];
   const normalized = accounts.map(normalizeAccount).filter(Boolean);
-  window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(normalized));
-  return normalized;
+  const hasAdmin = normalized.some((account) => account.id === DEFAULT_ADMIN_ACCOUNT.id || account.login.toLowerCase() === DEFAULT_ADMIN_ACCOUNT.login);
+  const withAdmin = hasAdmin ? normalized : [DEFAULT_ADMIN_ACCOUNT, ...normalized];
+  window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(withAdmin));
+  return withAdmin;
 }
 
 export function createTrainingAccount({ login, name, password } = {}) {
@@ -58,7 +75,14 @@ export function createTrainingAccount({ login, name, password } = {}) {
   if (!account) return { ok: false, error: 'Укажите логин', accounts: current, account: null };
   if (!account.password) return { ok: false, error: 'Укажите пароль', accounts: current, account: null };
   const duplicate = current.find((item) => item.login.toLowerCase() === account.login.toLowerCase());
-  if (duplicate) return { ok: false, error: 'Аккаунт с таким логином уже есть', accounts: current, account: duplicate };
+  if (duplicate) {
+    if (duplicate.id === DEFAULT_ADMIN_ACCOUNT.id) {
+      const accounts = saveTrainingAccounts(current.map((item) => item.id === duplicate.id ? { ...item, password: account.password } : item));
+      setActiveTrainingAccount(duplicate.id);
+      return { ok: true, accounts, account: accounts.find((item) => item.id === duplicate.id) };
+    }
+    return { ok: false, error: 'Аккаунт с таким логином уже есть', accounts: current, account: duplicate };
+  }
   const accounts = saveTrainingAccounts([account, ...current]);
   setActiveTrainingAccount(account.id);
   return { ok: true, accounts, account };
@@ -75,8 +99,8 @@ export function setActiveTrainingAccount(accountId) {
 }
 
 export function loadActiveTrainingAccountId() {
-  if (!canUseStorage()) return '';
-  return window.localStorage.getItem(ACTIVE_ACCOUNT_KEY) || '';
+  if (!canUseStorage()) return DEFAULT_ADMIN_ACCOUNT.id;
+  return window.localStorage.getItem(ACTIVE_ACCOUNT_KEY) || DEFAULT_ADMIN_ACCOUNT.id;
 }
 
 export function getActiveTrainingAccount(accounts = loadTrainingAccounts()) {
@@ -104,7 +128,24 @@ export function attachAccountToDialogRecord(record = {}, account = null) {
 
 export function filterRecordsByAccount(records = [], accountId = '') {
   if (!accountId) return [];
+  if (accountId === DEFAULT_ADMIN_ACCOUNT.id) {
+    return records.map(assignUnownedRecordToDefaultAdmin).filter((record) => record.accountId === DEFAULT_ADMIN_ACCOUNT.id);
+  }
   return records.filter((record) => record.accountId === accountId);
+}
+
+export function assignUnownedRecordToDefaultAdmin(record = {}) {
+  if (record.accountId) return record;
+  return {
+    ...record,
+    accountId: DEFAULT_ADMIN_ACCOUNT.id,
+    accountName: DEFAULT_ADMIN_ACCOUNT.login,
+    accountLogin: DEFAULT_ADMIN_ACCOUNT.login
+  };
+}
+
+export function normalizeHistoryRecordsForAdmin(records = []) {
+  return records.map(assignUnownedRecordToDefaultAdmin);
 }
 
 export function buildTestResume(record = {}) {
@@ -140,7 +181,8 @@ export function buildAccountAnalytics(records = [], accounts = []) {
   const rowById = new Map(rows.map((row) => [row.account.id, row]));
   const scoreBuckets = new Map();
 
-  for (const record of records) {
+  for (const rawRecord of records) {
+    const record = assignUnownedRecordToDefaultAdmin(rawRecord);
     const id = record.accountId || '';
     if (!id) continue;
     let row = rowById.get(id);
@@ -177,8 +219,9 @@ export function buildAccountAnalytics(records = [], accounts = []) {
 }
 
 export function buildAdminSummary(records = [], accounts = [], accountId = '') {
-  const scopedRecords = accountId ? filterRecordsByAccount(records, accountId) : records.filter((record) => record.accountId);
-  const analytics = buildAccountAnalytics(records, accounts);
+  const normalizedRecords = normalizeHistoryRecordsForAdmin(records);
+  const scopedRecords = accountId ? filterRecordsByAccount(normalizedRecords, accountId) : normalizedRecords.filter((record) => record.accountId);
+  const analytics = buildAccountAnalytics(normalizedRecords, accounts);
   const completedScores = scopedRecords.map((record) => record.score).filter((score) => typeof score === 'number');
   return {
     accountCount: accounts.length,
