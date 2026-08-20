@@ -31,6 +31,7 @@ import {
   getActiveTrainingAccount,
   loadActiveTrainingAccountId,
   loadTrainingAccounts,
+  normalizeHistoryRecordsForAdmin,
   setActiveTrainingAccount,
   touchTrainingAccount
 } from './adminStore.js';
@@ -47,7 +48,7 @@ function App() {
   const [selectionAnalysis, setSelectionAnalysis] = useState(restoredAttempt?.selectionAnalysis || null);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
-  const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
+  const [dialogHistory, setDialogHistory] = useState(() => normalizeHistoryRecordsForAdmin(loadDialogHistory()));
   const [historyMode, setHistoryMode] = useState('local');
   const [activeView, setActiveViewState] = useState(() => viewFromPath(window.location.pathname));
   const [adminAccounts, setAdminAccounts] = useState(() => loadTrainingAccounts());
@@ -151,9 +152,9 @@ function App() {
   };
 
   const deleteHistoryRecord = (id) => {
-    setDialogHistory(removeDialogRecord(id));
+    setDialogHistory(normalizeHistoryRecordsForAdmin(removeDialogRecord(id)));
     deleteServerDialogRecord(id).then((result) => {
-      if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(history.records));
+      if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(normalizeHistoryRecordsForAdmin(history.records)));
     });
   };
 
@@ -198,19 +199,19 @@ function App() {
       setSelectedHistoryRecord(null);
       setNewAccountLogin('');
       setNewAccountPassword('');
-      setAdminNotice(`Создан аккаунт: ${result.account.login}`);
+      setAdminNotice(result.account.id === 'admin-default' ? 'Пароль admin обновлён' : `Создан аккаунт: ${result.account.login}`);
     } else {
       setAdminNotice(result.error);
     }
   };
 
   const refreshAdminData = () => {
-    setDialogHistory(loadDialogHistory());
+    setDialogHistory(normalizeHistoryRecordsForAdmin(loadDialogHistory()));
     setAdminAccounts(loadTrainingAccounts());
     fetchServerDialogHistory().then((history) => {
       if (history.ok) {
         setHistoryMode('supabase');
-        setDialogHistory(history.records);
+        setDialogHistory(normalizeHistoryRecordsForAdmin(history.records));
       }
     });
     setAdminNotice('Данные обновлены');
@@ -218,13 +219,13 @@ function App() {
 
   const persistDialog = (finalMessages, evaluation = null) => {
     const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation, account: activeAccount });
-    setDialogHistory(upsertDialogRecord(record));
+    setDialogHistory(normalizeHistoryRecordsForAdmin(upsertDialogRecord(record)));
     if (activeAccount?.id) setAdminAccounts(touchTrainingAccount(activeAccount.id));
     saveServerDialogRecord(record).then((result) => {
       if (result.ok) {
         setHistoryMode('supabase');
         fetchServerDialogHistory().then((history) => {
-          if (history.ok) setDialogHistory(history.records);
+          if (history.ok) setDialogHistory(normalizeHistoryRecordsForAdmin(history.records));
         });
       }
     });
@@ -318,7 +319,7 @@ function App() {
     fetchServerDialogHistory().then((result) => {
       if (!alive) return;
       if (result.ok && result.records.length) {
-        setDialogHistory(result.records);
+        setDialogHistory(normalizeHistoryRecordsForAdmin(result.records));
         setHistoryMode('supabase');
       } else if (result.configured) {
         setHistoryMode('supabase');
@@ -520,7 +521,7 @@ function AdminDashboard({
         <div>
           <p className="kicker">Админка T-TRAINER</p>
           <h1>Аккаунты и история прохождений</h1>
-          <p className="adminHint">Создайте аккаунт по логину и паролю. Выберите аккаунт — ниже появится только его история тестов.</p>
+          <p className="adminHint">Аккаунт admin уже создан и забирает всю старую историю. Введите логин admin + пароль, чтобы сохранить пароль для следующего шага входа.</p>
         </div>
         <button type="button" className="ghost refreshButton" onClick={onRefresh}>Обновить</button>
       </header>
@@ -555,7 +556,7 @@ function AdminDashboard({
               type="password"
               autoComplete="new-password"
             />
-            <button type="submit" className="primary compactPrimary">Создать</button>
+            <button type="submit" className="primary compactPrimary">Сохранить</button>
           </form>
 
           {!accounts.length ? (

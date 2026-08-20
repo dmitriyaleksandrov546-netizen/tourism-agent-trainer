@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_ADMIN_ACCOUNT,
   attachAccountToDialogRecord,
   buildAccountAnalytics,
   buildAdminSummary,
@@ -7,7 +8,8 @@ import {
   createTrainingAccount,
   filterRecordsByAccount,
   getActiveTrainingAccount,
-  loadTrainingAccounts
+  loadTrainingAccounts,
+  normalizeHistoryRecordsForAdmin
 } from './adminStore.js';
 
 beforeEach(() => {
@@ -28,18 +30,21 @@ describe('adminStore', () => {
     const result = createTrainingAccount({ login: 'irina', password: '12345' });
 
     expect(result.ok).toBe(true);
-    expect(loadTrainingAccounts()).toHaveLength(1);
+    expect(loadTrainingAccounts()).toHaveLength(2);
     expect(getActiveTrainingAccount().login).toBe('irina');
     expect(getActiveTrainingAccount().password).toBe('12345');
   });
 
-  it('requires password and rejects duplicate logins', () => {
+  it('requires password and rejects duplicate logins except admin password update', () => {
     expect(createTrainingAccount({ login: 'irina' }).ok).toBe(false);
+    const adminUpdate = createTrainingAccount({ login: 'admin', password: 'owner-pass' });
+    expect(adminUpdate.ok).toBe(true);
+    expect(adminUpdate.account.password).toBe('owner-pass');
     createTrainingAccount({ login: 'irina', password: '12345' });
     const duplicate = createTrainingAccount({ login: 'IRINA', password: '67890' });
 
     expect(duplicate.ok).toBe(false);
-    expect(loadTrainingAccounts()).toHaveLength(1);
+    expect(loadTrainingAccounts()).toHaveLength(2);
   });
 
   it('attaches account login fields to dialog records without roles', () => {
@@ -52,15 +57,21 @@ describe('adminStore', () => {
     expect(record.accountRole).toBeUndefined();
   });
 
-  it('filters dialog records by selected account', () => {
+  it('filters dialog records by selected account and assigns old tests to admin', () => {
     const records = [
       { accountId: 'a1', scenarioTitle: 'Турция' },
       { accountId: 'a2', scenarioTitle: 'Египет' },
-      { accountId: '', scenarioTitle: 'Без аккаунта' }
+      { accountId: '', scenarioTitle: 'Старый тест' }
     ];
 
     expect(filterRecordsByAccount(records, 'a1')).toEqual([{ accountId: 'a1', scenarioTitle: 'Турция' }]);
     expect(filterRecordsByAccount(records, '')).toEqual([]);
+    expect(filterRecordsByAccount(records, DEFAULT_ADMIN_ACCOUNT.id)[0]).toMatchObject({
+      accountId: DEFAULT_ADMIN_ACCOUNT.id,
+      accountLogin: 'admin',
+      scenarioTitle: 'Старый тест'
+    });
+    expect(normalizeHistoryRecordsForAdmin(records)[2]).toMatchObject({ accountId: DEFAULT_ADMIN_ACCOUNT.id, accountLogin: 'admin' });
   });
 
   it('builds account analytics from dialog records', () => {
