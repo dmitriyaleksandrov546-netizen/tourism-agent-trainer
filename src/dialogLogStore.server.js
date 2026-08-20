@@ -27,7 +27,7 @@ async function requestSupabase(path, { method = 'GET', body } = {}) {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: method === 'POST' ? 'return=representation' : 'return=minimal'
+      Prefer: method === 'POST' || method === 'PATCH' ? 'return=representation' : 'return=minimal'
     },
     body: body ? JSON.stringify(body) : undefined
   });
@@ -83,6 +83,24 @@ export async function createDialogLog(record) {
     }
     if (!accountColumnsMissing) throw error;
     const rows = await requestSupabase('', { method: 'POST', body: buildDialogPayload(record, { accountMode: 'none' }) });
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
+}
+
+export async function updateDialogLog(id, record) {
+  if (!id) return createDialogLog(record);
+  try {
+    const rows = await requestSupabase(`?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body: buildDialogPayload(record) });
+    return Array.isArray(rows) ? rows[0] : rows;
+  } catch (error) {
+    const accountLoginMissing = error?.status === 400 && /account_login/i.test(`${error.message || ''} ${JSON.stringify(error.details || {})}`);
+    const accountColumnsMissing = error?.status === 400 && /account_/i.test(`${error.message || ''} ${JSON.stringify(error.details || {})}`);
+    if (accountLoginMissing) {
+      const rows = await requestSupabase(`?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body: buildDialogPayload(record, { accountMode: 'legacy' }) });
+      return Array.isArray(rows) ? rows[0] : rows;
+    }
+    if (!accountColumnsMissing) throw error;
+    const rows = await requestSupabase(`?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body: buildDialogPayload(record, { accountMode: 'none' }) });
     return Array.isArray(rows) ? rows[0] : rows;
   }
 }

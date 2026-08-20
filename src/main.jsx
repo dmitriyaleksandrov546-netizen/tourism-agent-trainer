@@ -18,6 +18,7 @@ import {
   loadCurrentAttempt,
   loadDialogHistory,
   loadScenarioAttempt,
+  mergeIncrementalDialogRecords,
   removeDialogRecord,
   saveScenarioAttempt,
   upsertDialogRecord
@@ -38,6 +39,14 @@ import {
 import { pathForView, viewFromPath } from './adminNavigation.js';
 import './styles.css';
 
+function createClientDialogId() {
+  return `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeVisibleDialogHistory(records = []) {
+  return normalizeHistoryRecordsForAdmin(mergeIncrementalDialogRecords(records));
+}
+
 function App() {
   const restoredAttempt = useMemo(() => loadCurrentAttempt(), []);
   const [activeScenarioId, setActiveScenarioId] = useState(restoredAttempt?.scenarioId || 'turkey-family-hard');
@@ -48,7 +57,7 @@ function App() {
   const [selectionAnalysis, setSelectionAnalysis] = useState(restoredAttempt?.selectionAnalysis || null);
   const [isSending, setIsSending] = useState(false);
   const [copyState, setCopyState] = useState('');
-  const [dialogHistory, setDialogHistory] = useState(() => normalizeHistoryRecordsForAdmin(loadDialogHistory()));
+  const [dialogHistory, setDialogHistory] = useState(() => normalizeVisibleDialogHistory(loadDialogHistory()));
   const [historyMode, setHistoryMode] = useState('local');
   const [activeView, setActiveViewState] = useState(() => viewFromPath(window.location.pathname));
   const [adminAccounts, setAdminAccounts] = useState(() => loadTrainingAccounts());
@@ -63,6 +72,10 @@ function App() {
   const [checkedTravelItems, setCheckedTravelItems] = useState(restoredAttempt?.checkedTravelItems || {});
   const draftRef = useRef(draft);
   const delayedClientTimerRef = useRef(null);
+  const dialogRecordIdRef = useRef(restoredAttempt?.dialogRecordId || createClientDialogId());
+  const dialogCreatedAtRef = useRef(restoredAttempt?.dialogCreatedAt || new Date().toISOString());
+  const serverDialogRecordIdRef = useRef(restoredAttempt?.serverDialogRecordId || '');
+  const serverSaveChainRef = useRef(Promise.resolve());
 
   const activeScenario = useMemo(() => getScenarioById(activeScenarioId), [activeScenarioId]);
   const travelChecklist = useMemo(() => buildTravelDocumentChecklist(activeScenario), [activeScenario]);
@@ -95,6 +108,10 @@ function App() {
     if (id === activeScenarioId) return;
     clearDelayedClientReply();
     const savedAttempt = loadScenarioAttempt(id);
+    const nextDialogId = savedAttempt?.dialogRecordId || createClientDialogId();
+    dialogRecordIdRef.current = nextDialogId;
+    dialogCreatedAtRef.current = savedAttempt?.dialogCreatedAt || new Date().toISOString();
+    serverDialogRecordIdRef.current = savedAttempt?.serverDialogRecordId || '';
     setActiveScenarioId(id);
     setMessages(savedAttempt?.messages?.length ? savedAttempt.messages : createInitialMessages(id, Date.now()));
     updateDraft(savedAttempt?.draft || '');
@@ -113,6 +130,9 @@ function App() {
     clearDelayedClientReply();
     clearCurrentAttempt();
     clearScenarioAttempt(activeScenarioId);
+    dialogRecordIdRef.current = createClientDialogId();
+    dialogCreatedAtRef.current = new Date().toISOString();
+    serverDialogRecordIdRef.current = '';
     setMessages(createInitialMessages(activeScenarioId, Date.now()));
     updateDraft('');
     setLastEvaluation(null);
@@ -144,6 +164,9 @@ function App() {
   const copyHistoryRecord = async (record) => copyText(formatDialogRecord(record), 'Диалог скопирован');
 
   const openHistoryRecord = (record) => {
+    dialogRecordIdRef.current = record.id || createClientDialogId();
+    dialogCreatedAtRef.current = record.createdAt || new Date().toISOString();
+    serverDialogRecordIdRef.current = record.serverId || (/^[0-9a-f-]{36}$/i.test(record.id || '') ? record.id : '');
     setActiveScenarioId(record.scenarioId);
     setMessages(record.messages || []);
     updateDraft('');
@@ -152,9 +175,9 @@ function App() {
   };
 
   const deleteHistoryRecord = (id) => {
-    setDialogHistory(normalizeHistoryRecordsForAdmin(removeDialogRecord(id)));
+    setDialogHistory(normalizeVisibleDialogHistory(removeDialogRecord(id)));
     deleteServerDialogRecord(id).then((result) => {
-      if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(normalizeHistoryRecordsForAdmin(history.records)));
+      if (result.ok) fetchServerDialogHistory().then((history) => history.ok && setDialogHistory(normalizeVisibleDialogHistory(history.records)));
     });
   };
 
@@ -206,29 +229,51 @@ function App() {
   };
 
   const refreshAdminData = () => {
-    setDialogHistory(normalizeHistoryRecordsForAdmin(loadDialogHistory()));
+    setDialogHistory(normalizeVisibleDialogHistory(loadDialogHistory()));
     setAdminAccounts(loadTrainingAccounts());
     fetchServerDialogHistory().then((history) => {
       if (history.ok) {
         setHistoryMode('supabase');
-        setDialogHistory(normalizeHistoryRecordsForAdmin(history.records));
+        setDialogHistory(normalizeVisibleDialogHistory(history.records));
       }
     });
     setAdminNotice('Данные обновлены');
   };
 
   const persistDialog = (finalMessages, evaluation = null) => {
-    const record = createDialogRecord({ scenario: activeScenario, messages: finalMessages, evaluation, account: activeAccount });
-    setDialogHistory(normalizeHistoryRecordsForAdmin(upsertDialogRecord(record)));
-    if (activeAccount?.id) setAdminAccounts(touchTrainingAccount(activeAccount.id));
-    saveServerDialogRecord(record).then((result) => {
-      if (result.ok) {
-        setHistoryMode('supabase');
-        fetchServerDialogHistory().then((history) => {
-          if (history.ok) setDialogHistory(normalizeHistoryRecordsForAdmin(history.records));
-        });
-      }
+    const record = createDialogRecord({
+      scenario: activeScenario,
+      messages: finalMessages,
+      evaluation,
+      account: activeAccount,
+      id: dialogRecordIdRef.current,
+      createdAt: dialogCreatedAtRef.current,
+      serverId: serverDialogRecordIdRef.current
     });
+    setDialogHistory(normalizeVisibleDialogHistory(upsertDialogRecord(record)));
+    if (activeAccount?.id) setAdminAccounts(touchTrainingAccount(activeAccount.id));
+    serverSaveChainRef.current = serverSaveChainRef.current
+      .catch(() => null)
+      .then(() => saveServerDialogRecord(record, { serverRecordId: serverDialogRecordIdRef.current }))
+      .then((result) => {
+        if (result.ok) {
+          serverDialogRecordIdRef.current = result.record?.id || serverDialogRecordIdRef.current;
+          setHistoryMode('supabase');
+          saveScenarioAttempt({
+            scenarioId: activeScenarioId,
+            messages: finalMessages,
+            draft: draftRef.current,
+            lastEvaluation: evaluation,
+            activePhase,
+            selectionAnalysis,
+            checkedTravelItems,
+            dialogRecordId: dialogRecordIdRef.current,
+            dialogCreatedAt: dialogCreatedAtRef.current,
+            serverDialogRecordId: serverDialogRecordIdRef.current
+          });
+        }
+        return result;
+      });
   };
 
   const scheduleClientReply = ({ thinkingId, nextMessages, text, turn, history, evaluation }) => {
@@ -319,7 +364,7 @@ function App() {
     fetchServerDialogHistory().then((result) => {
       if (!alive) return;
       if (result.ok && result.records.length) {
-        setDialogHistory(normalizeHistoryRecordsForAdmin(result.records));
+        setDialogHistory(normalizeVisibleDialogHistory(result.records));
         setHistoryMode('supabase');
       } else if (result.configured) {
         setHistoryMode('supabase');
@@ -344,7 +389,10 @@ function App() {
       lastEvaluation,
       activePhase,
       selectionAnalysis,
-      checkedTravelItems
+      checkedTravelItems,
+      dialogRecordId: dialogRecordIdRef.current,
+      dialogCreatedAt: dialogCreatedAtRef.current,
+      serverDialogRecordId: serverDialogRecordIdRef.current
     });
   }, [activeScenarioId, messages, draft, lastEvaluation, activePhase, selectionAnalysis, checkedTravelItems]);
 

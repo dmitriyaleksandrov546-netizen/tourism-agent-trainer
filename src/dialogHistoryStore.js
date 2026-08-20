@@ -26,15 +26,16 @@ export function saveDialogHistory(records = []) {
   return normalized;
 }
 
-export function createDialogRecord({ scenario, messages, evaluation, account = null }) {
+export function createDialogRecord({ scenario, messages, evaluation, account = null, id = '', createdAt = '', serverId = '' }) {
   const agentMessages = messages.filter((message) => message.role === 'agent');
   const clientMessages = messages.filter((message) => message.role === 'client');
   const lastAgent = agentMessages.at(-1)?.text || '';
   const lastClient = clientMessages.at(-1)?.text || '';
 
   return {
-    id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: new Date().toISOString(),
+    id: id || `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    serverId: serverId || '',
+    createdAt: createdAt || new Date().toISOString(),
     scenarioId: scenario.id,
     scenarioTitle: scenario.shortTitle,
     scenarioSubtitle: scenario.shortSubtitle,
@@ -54,6 +55,61 @@ export function upsertDialogRecord(record) {
   const current = loadDialogHistory();
   const withoutSame = current.filter((item) => item.id !== record.id);
   return saveDialogHistory([record, ...withoutSame].slice(0, MAX_RECORDS));
+}
+
+function messageSignature(message = {}) {
+  return `${message.role || ''}\u0000${message.text || ''}`;
+}
+
+function isPrefixMessages(shortMessages = [], longMessages = []) {
+  if (!shortMessages.length || shortMessages.length > longMessages.length) return false;
+  return shortMessages.every((message, index) => messageSignature(message) === messageSignature(longMessages[index]));
+}
+
+function areLikelySameIncrementalDialog(left = {}, right = {}) {
+  const leftMessages = Array.isArray(left.messages) ? left.messages : [];
+  const rightMessages = Array.isArray(right.messages) ? right.messages : [];
+  if (!isPrefixMessages(leftMessages, rightMessages) && !isPrefixMessages(rightMessages, leftMessages)) return false;
+  const sameScenario = (left.scenarioId || '') === (right.scenarioId || '');
+  const sameAccount = (left.accountId || left.accountLogin || left.accountName || '') === (right.accountId || right.accountLogin || right.accountName || '');
+  if (!sameScenario || !sameAccount) return false;
+  const leftTime = new Date(left.createdAt || 0).getTime();
+  const rightTime = new Date(right.createdAt || 0).getTime();
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return false;
+  return Math.abs(leftTime - rightTime) <= 30 * 60 * 1000;
+}
+
+function mergeDialogProgressRecord(base = {}, incoming = {}) {
+  const baseMessages = Array.isArray(base.messages) ? base.messages : [];
+  const incomingMessages = Array.isArray(incoming.messages) ? incoming.messages : [];
+  const better = incomingMessages.length >= baseMessages.length ? incoming : base;
+  const older = better === incoming ? base : incoming;
+  return {
+    ...older,
+    ...better,
+    id: better.id || older.id,
+    serverId: better.serverId || older.serverId || '',
+    createdAt: better.createdAt || older.createdAt,
+    score: better.score ?? older.score ?? null,
+    verdict: better.verdict || older.verdict || '',
+    messages: better.messages || older.messages || [],
+    lastAgent: better.lastAgent || older.lastAgent || '',
+    lastClient: better.lastClient || older.lastClient || ''
+  };
+}
+
+export function mergeIncrementalDialogRecords(records = []) {
+  const sorted = [...records].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+  const merged = [];
+  for (const record of sorted) {
+    const index = merged.findIndex((candidate) => areLikelySameIncrementalDialog(candidate, record));
+    if (index >= 0) {
+      merged[index] = mergeDialogProgressRecord(merged[index], record);
+    } else {
+      merged.push(record);
+    }
+  }
+  return merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, MAX_RECORDS);
 }
 
 export function removeDialogRecord(id) {
@@ -89,6 +145,9 @@ export function saveCurrentAttempt(attempt = {}) {
     activePhase: attempt.activePhase || 'dialogue',
     selectionAnalysis: attempt.selectionAnalysis || null,
     checkedTravelItems: attempt.checkedTravelItems || {},
+    dialogRecordId: attempt.dialogRecordId || '',
+    dialogCreatedAt: attempt.dialogCreatedAt || '',
+    serverDialogRecordId: attempt.serverDialogRecordId || '',
     updatedAt: new Date().toISOString()
   };
   window.localStorage.setItem(CURRENT_ATTEMPT_KEY, JSON.stringify(normalized));
