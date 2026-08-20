@@ -32,6 +32,7 @@ import {
   setActiveTrainingAccount,
   touchTrainingAccount
 } from './adminStore.js';
+import { pathForView, viewFromPath } from './adminNavigation.js';
 import './styles.css';
 
 function App() {
@@ -46,7 +47,7 @@ function App() {
   const [copyState, setCopyState] = useState('');
   const [dialogHistory, setDialogHistory] = useState(() => loadDialogHistory());
   const [historyMode, setHistoryMode] = useState('local');
-  const [activeView, setActiveView] = useState('trainer');
+  const [activeView, setActiveViewState] = useState(() => viewFromPath(window.location.pathname));
   const [adminAccounts, setAdminAccounts] = useState(() => loadTrainingAccounts());
   const [activeAccountId, setActiveAccountId] = useState(() => loadActiveTrainingAccountId());
   const [newAccountName, setNewAccountName] = useState('');
@@ -65,6 +66,12 @@ function App() {
     adminAccounts.find((account) => account.id === activeAccountId) || getActiveTrainingAccount(adminAccounts)
   ), [adminAccounts, activeAccountId]);
   const adminSummary = useMemo(() => buildAdminSummary(dialogHistory, adminAccounts), [dialogHistory, adminAccounts]);
+
+  const setActiveView = (view) => {
+    setActiveViewState(view);
+    const path = pathForView(view);
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+  };
 
   const clearDelayedClientReply = () => {
     if (delayedClientTimerRef.current) {
@@ -314,6 +321,12 @@ function App() {
   }, []);
 
   useEffect(() => () => clearDelayedClientReply(), []);
+
+  useEffect(() => {
+    const syncViewFromPath = () => setActiveViewState(viewFromPath(window.location.pathname));
+    window.addEventListener('popstate', syncViewFromPath);
+    return () => window.removeEventListener('popstate', syncViewFromPath);
+  }, []);
 
   useEffect(() => {
     saveScenarioAttempt({
