@@ -624,7 +624,7 @@ function AdminDashboard({
                   onClick={() => onSelectAccount(row.account.id)}
                 >
                   <b>{row.account.login || row.account.name}</b>
-                  <span>{row.attempts} прохожд. · средний {row.averageScore ?? '—'} · лучший {row.bestScore ?? '—'}</span>
+                  <span>{row.attempts} прох. · ср. {row.averageScore ?? '—'} · лучш. {row.bestScore ?? '—'}</span>
                   <small>{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString('ru-RU') : 'ещё не проходил'}</small>
                 </button>
               ))}
@@ -633,17 +633,16 @@ function AdminDashboard({
         </section>
 
         <section className="card adminCard">
-          <h2>Контроль действий{activeAccount ? ` · ${activeAccount.login || activeAccount.name}` : ''}</h2>
-          <div className="analyticsTable">
+          <h2>Контроль · {activeAccount ? (activeAccount.login || activeAccount.name) : 'аккаунт'}</h2>
+          <div className="analyticsTable compactAnalyticsTable">
             <div className="analyticsHeader">
-              <span>Логин</span><span>Попытки</span><span>Средний</span><span>Слабые сценарии</span>
+              <span>Логин</span><span>Попытки</span><span>Средний</span>
             </div>
             {activeAccount ? summary.analytics.filter((row) => row.account.id === activeAccount.id).map((row) => (
               <div className="analyticsRow" key={row.account.id}>
                 <b>{row.account.login || row.account.name}</b>
                 <span>{row.attempts}</span>
                 <span>{row.averageScore ?? '—'}</span>
-                <span>{row.weakScenarios.length ? row.weakScenarios.join(', ') : row.topScenario}</span>
               </div>
             )) : <p className="emptyHistory">Выберите аккаунт слева.</p>}
           </div>

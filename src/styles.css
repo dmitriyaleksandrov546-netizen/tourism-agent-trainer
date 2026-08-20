@@ -27,13 +27,13 @@ button { cursor: pointer; }
 .leftRail button.active { background: #e6f7ef; color: var(--green-dark); border-color: rgba(230,247,239,.48); }
 .railSpacer { min-height: 1px; }
 .leftRail .accountAvatarButton { align-self: end; border-radius: 999px; background: #e6f7ef; color: var(--green-dark); border-color: rgba(230,247,239,.56); font-size: 18px; box-shadow: 0 10px 28px rgba(0,0,0,.18); }
-.appContent { width: min(1360px, 100%); margin: 0 auto; padding: 22px; }
-.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-.kicker { margin: 0 0 4px; color: var(--green-dark); font-size: 14px; font-weight: 900; }
+.appContent { width: min(1360px, 100%); margin: 0 auto; padding: 16px 18px; }
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.kicker { margin: 0 0 2px; color: var(--green-dark); font-size: 13px; font-weight: 900; }
 h1, h2, h3, p { margin-top: 0; }
-h1 { margin-bottom: 0; font-size: clamp(25px, 4vw, 42px); line-height: 1.02; letter-spacing: -.04em; }
-h2 { margin-bottom: 14px; font-size: 20px; letter-spacing: -.02em; }
-h3 { margin: 0 0 12px; font-size: 18px; }
+h1 { margin-bottom: 0; font-size: clamp(23px, 3.2vw, 36px); line-height: 1.02; letter-spacing: -.04em; }
+h2 { margin-bottom: 8px; font-size: 18px; letter-spacing: -.02em; }
+h3 { margin: 0 0 8px; font-size: 16px; }
 
 .layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: 0 12px 34px rgba(23, 44, 36, .06); }
@@ -61,31 +61,31 @@ h3 { margin: 0 0 12px; font-size: 18px; }
 .historyActions button { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 8px; background: #f8faf8; padding: 0; color: var(--green-dark); font-size: 13px; font-weight: 850; line-height: 1; }
 .danger { color: var(--bad); }
 .activeAccountBadge { margin: 10px 0 0; display: inline-flex; gap: 5px; align-items: center; border-radius: 999px; padding: 7px 11px; background: #e6f7ef; color: var(--green-dark); font-size: 13px; font-weight: 800; }
-.adminPage { display: grid; gap: 10px; }
+.adminPage { display: grid; gap: 8px; }
 .adminTop { margin-bottom: 0; align-items: center; }
 .compactAdminTop h1 { font-size: clamp(22px, 3vw, 30px); }
 .adminHint, .adminNotice, .refreshButton { display: none; }
-.adminStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.adminStats article { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 9px 11px; box-shadow: 0 8px 20px rgba(23, 44, 36, .04); }
-.adminStats span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 850; }
-.adminStats b { display: block; color: var(--green-dark); font-size: 22px; letter-spacing: -.04em; }
-.adminGrid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 10px; align-items: start; }
-.adminDetailGrid { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 10px; align-items: start; }
-.adminCard { display: grid; gap: 9px; padding: 12px; }
-.accountForm { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; }
-.accountForm input, .accountForm select { width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 11px; padding: 0 10px; background: #fff; color: var(--ink); outline: none; }
+.adminStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.adminStats article { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 7px 10px; box-shadow: 0 6px 16px rgba(23, 44, 36, .035); }
+.adminStats span { display: block; margin-bottom: 1px; color: var(--muted); font-size: 10px; font-weight: 850; }
+.adminStats b { display: block; color: var(--green-dark); font-size: 20px; letter-spacing: -.04em; }
+.adminGrid { display: grid; grid-template-columns: minmax(260px, 350px) minmax(0, 1fr); gap: 8px; align-items: start; }
+.adminDetailGrid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 8px; align-items: start; }
+.adminCard { display: grid; gap: 7px; padding: 10px; border-radius: 16px; }
+.accountForm { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 5px; }
+.accountForm input, .accountForm select { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 10px; padding: 0 9px; background: #fff; color: var(--ink); outline: none; }
 .accountForm input:focus, .accountForm select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(11,132,99,.09); }
-.compactPrimary { margin: 0; min-width: 92px; min-height: 36px; border-radius: 11px; font-size: 13px; }
-.accountList { display: grid; gap: 6px; }
-.accountList button { width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 8px 10px; color: var(--ink); }
+.compactPrimary { margin: 0; min-width: 84px; min-height: 32px; border-radius: 10px; font-size: 12px; padding: 0 12px; }
+.accountList { display: grid; gap: 5px; }
+.accountList button { width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 11px; background: #fff; padding: 7px 9px; color: var(--ink); }
 .accountList button.active { border-color: var(--green); background: #e6f7ef; }
 .accountList button:disabled { cursor: default; opacity: .72; }
 .accountList b, .accountList span, .accountList small { display: block; }
-.accountList b { margin-bottom: 2px; font-size: 14px; }
-.accountList span { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+.accountList b { margin-bottom: 1px; font-size: 13px; }
+.accountList span { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
 .accountList small { color: var(--green-dark); font-size: 10px; font-weight: 850; }
-.analyticsTable { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; background: #fff; }
-.analyticsHeader, .analyticsRow { display: grid; grid-template-columns: 1.2fr .55fr .55fr 1.4fr; gap: 8px; align-items: start; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.analyticsTable { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+.analyticsHeader, .analyticsRow { display: grid; grid-template-columns: 1fr .45fr .45fr; gap: 8px; align-items: center; padding: 7px 9px; border-bottom: 1px solid var(--line); }
 .analyticsHeader { background: #f4f8f5; color: var(--green-dark); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .03em; }
 .analyticsRow:last-child { border-bottom: 0; }
 .analyticsRow b { color: var(--ink); }
