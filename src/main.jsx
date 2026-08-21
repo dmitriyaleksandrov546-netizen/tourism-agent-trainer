@@ -433,13 +433,13 @@ function App() {
         </button>
         <div className="railSpacer" aria-hidden="true" />
         <button
-          className="accountAvatarButton"
+          className={activeView === 'accounts' ? 'accountAvatarButton active' : 'accountAvatarButton'}
           type="button"
-          title={activeAccount?.login || activeAccount?.name || 'Аккаунт'}
-          aria-label={`Аккаунт ${activeAccount?.login || activeAccount?.name || ''}`.trim()}
-          onClick={() => setActiveView('admin')}
+          title="Аккаунты"
+          aria-label="Аккаунты"
+          onClick={() => setActiveView('accounts')}
         >
-          {(activeAccount?.login || activeAccount?.name || '?').slice(0, 1).toUpperCase()}
+          A
         </button>
       </aside>
 
@@ -452,6 +452,17 @@ function App() {
             records={selectedAccountRecords}
             selectedRecord={selectedHistoryRecord}
             mode={historyMode}
+            onSelectAccount={selectTrainingAccount}
+            onInspectRecord={setSelectedHistoryRecord}
+            onCopyRecord={copyHistoryRecord}
+            onDeleteRecord={deleteHistoryRecord}
+            onClearRecords={clearHistory}
+          />
+        ) : activeView === 'accounts' ? (
+          <AccountsAdminPage
+            accounts={adminAccounts}
+            activeAccountId={activeAccount?.id || ''}
+            summary={adminSummary}
             notice={adminNotice}
             newAccountLogin={newAccountLogin}
             newAccountPassword={newAccountPassword}
@@ -459,11 +470,6 @@ function App() {
             onAccountPasswordChange={setNewAccountPassword}
             onCreateAccount={addTrainingAccount}
             onSelectAccount={selectTrainingAccount}
-            onRefresh={refreshAdminData}
-            onInspectRecord={setSelectedHistoryRecord}
-            onCopyRecord={copyHistoryRecord}
-            onDeleteRecord={deleteHistoryRecord}
-            onClearRecords={clearHistory}
           />
         ) : (
           <>
@@ -558,42 +564,98 @@ function AdminDashboard({
   records,
   selectedRecord,
   mode,
-  notice,
-  newAccountLogin,
-  newAccountPassword,
-  onAccountLoginChange,
-  onAccountPasswordChange,
-  onCreateAccount,
   onSelectAccount,
-  onRefresh,
   onInspectRecord,
   onCopyRecord,
   onDeleteRecord,
   onClearRecords
 }) {
   const activeAccount = accounts.find((account) => account.id === activeAccountId);
+  const activeAnalytics = activeAccount ? summary.analytics.find((row) => row.account.id === activeAccount.id) : null;
+  const openedRecord = selectedRecord || records[0] || null;
+
   return (
-    <section className="adminPage">
+    <section className="adminPage adminWorkspacePage">
       <header className="top adminTop compactAdminTop">
         <div>
           <p className="kicker">Админка T-TRAINER</p>
-          <h1>Аккаунты и история</h1>
+          <h1>История и резюме тестов</h1>
         </div>
       </header>
 
-      <section className="adminStats">
-        <article><span>Аккаунтов</span><b>{summary.accountCount}</b></article>
-        <article><span>Прохождений аккаунта</span><b>{summary.attempts}</b></article>
-        <article><span>С оценкой</span><b>{summary.completed}</b></article>
-        <article><span>Средний балл</span><b>{summary.averageScore ?? '—'}</b></article>
-      </section>
+      <section className="adminWorkspace">
+        <aside className="card adminCard adminHistorySticky">
+          <HistoryPanel
+            records={records}
+            mode={mode}
+            activeAccount={activeAccount}
+            activeRecordId={openedRecord?.id || ''}
+            onInspect={onInspectRecord}
+            onCopy={onCopyRecord}
+            onDelete={onDeleteRecord}
+            onClear={onClearRecords}
+          />
+        </aside>
 
-      <section className="adminGrid">
-        <section className="card adminCard">
-          <div className="historyHead">
-            <h2>Аккаунты</h2>
+        <section className="card adminCard adminResumePane">
+          <DialogLogPanel record={openedRecord} />
+        </section>
+
+        <aside className="accountSidePanel" aria-label="Аккаунты и статистика">
+          <div className="accountSideHead">
+            <span>Аккаунты</span>
+            <b>{summary.accountCount}</b>
           </div>
-          <form className="accountForm" onSubmit={onCreateAccount}>
+          <div className="accountSwitchList">
+            {summary.analytics.map((row) => (
+              <button
+                type="button"
+                key={row.account.id}
+                className={row.account.id === activeAccountId ? 'active' : ''}
+                onClick={() => onSelectAccount(row.account.id)}
+              >
+                <b>{row.account.login || row.account.name}</b>
+                <span>{row.attempts} тестов · ср. {row.averageScore ?? '—'}</span>
+              </button>
+            ))}
+          </div>
+          <div className="accountMiniStats">
+            <article><span>Попытки</span><b>{activeAnalytics?.attempts ?? 0}</b></article>
+            <article><span>С оценкой</span><b>{activeAnalytics?.completed ?? 0}</b></article>
+            <article><span>Средний</span><b>{activeAnalytics?.averageScore ?? '—'}</b></article>
+            <article><span>Лучший</span><b>{activeAnalytics?.bestScore ?? '—'}</b></article>
+          </div>
+        </aside>
+      </section>
+    </section>
+  );
+}
+
+function AccountsAdminPage({
+  accounts,
+  activeAccountId,
+  summary,
+  notice,
+  newAccountLogin,
+  newAccountPassword,
+  onAccountLoginChange,
+  onAccountPasswordChange,
+  onCreateAccount,
+  onSelectAccount
+}) {
+  return (
+    <section className="accountsPage">
+      <header className="top adminTop compactAdminTop">
+        <div>
+          <p className="kicker">Технический раздел</p>
+          <h1>Создание аккаунтов</h1>
+        </div>
+      </header>
+
+      <section className="accountsAdminGrid">
+        <section className="card accountsCreateCard">
+          <h2>Новый аккаунт</h2>
+          <form className="accountForm accountFormLarge" onSubmit={onCreateAccount}>
             <input
               value={newAccountLogin}
               onChange={(event) => onAccountLoginChange(event.target.value)}
@@ -611,58 +673,28 @@ function AdminDashboard({
             />
             <button type="submit" className="primary compactPrimary">Сохранить</button>
           </form>
-
-          {!accounts.length ? (
-            <p className="emptyHistory">Пока нет аккаунтов. Создайте логин и пароль для менеджера.</p>
-          ) : (
-            <div className="accountList">
-              {summary.analytics.map((row) => (
-                <button
-                  type="button"
-                  key={row.account.id}
-                  className={row.account.id === activeAccountId ? 'active' : ''}
-                  onClick={() => onSelectAccount(row.account.id)}
-                >
-                  <b>{row.account.login || row.account.name}</b>
-                  <span>{row.attempts} прох. · ср. {row.averageScore ?? '—'} · лучш. {row.bestScore ?? '—'}</span>
-                  <small>{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString('ru-RU') : 'ещё не проходил'}</small>
-                </button>
-              ))}
-            </div>
-          )}
+          {notice && <p className="accountNotice">{notice}</p>}
         </section>
 
-        <section className="card adminCard">
-          <h2>Контроль · {activeAccount ? (activeAccount.login || activeAccount.name) : 'аккаунт'}</h2>
-          <div className="analyticsTable compactAnalyticsTable">
-            <div className="analyticsHeader">
-              <span>Логин</span><span>Попытки</span><span>Средний</span>
-            </div>
-            {activeAccount ? summary.analytics.filter((row) => row.account.id === activeAccount.id).map((row) => (
-              <div className="analyticsRow" key={row.account.id}>
-                <b>{row.account.login || row.account.name}</b>
-                <span>{row.attempts}</span>
-                <span>{row.averageScore ?? '—'}</span>
-              </div>
-            )) : <p className="emptyHistory">Выберите аккаунт слева.</p>}
+        <section className="card accountsCreateCard">
+          <div className="historyHead">
+            <h2>Аккаунты</h2>
+            <span className="scorePill">{summary.accountCount}</span>
           </div>
-        </section>
-      </section>
-
-      <section className="adminDetailGrid">
-        <section className="card adminCard">
-          <HistoryPanel
-            records={records}
-            mode={mode}
-            activeAccount={activeAccount}
-            onInspect={onInspectRecord}
-            onCopy={onCopyRecord}
-            onDelete={onDeleteRecord}
-            onClear={onClearRecords}
-          />
-        </section>
-        <section className="card adminCard">
-          <DialogLogPanel record={selectedRecord || records[0] || null} />
+          <div className="accountList technicalAccountList">
+            {summary.analytics.map((row) => (
+              <button
+                type="button"
+                key={row.account.id}
+                className={row.account.id === activeAccountId ? 'active' : ''}
+                onClick={() => onSelectAccount(row.account.id)}
+              >
+                <b>{row.account.login || row.account.name}</b>
+                <span>{row.attempts} прох. · ср. {row.averageScore ?? '—'} · лучш. {row.bestScore ?? '—'}</span>
+                <small>{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString('ru-RU') : 'ещё не проходил'}</small>
+              </button>
+            ))}
+          </div>
         </section>
       </section>
     </section>
@@ -766,7 +798,7 @@ function TravelRequirementsDrawer({ checklist, checkedItems, isOpen, monitoring,
   );
 }
 
-function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelete, onClear }) {
+function HistoryPanel({ records, mode, activeAccount, activeRecordId, onInspect, onCopy, onDelete, onClear }) {
   return (
     <section className="historyPanel">
       <div className="historyHead">
@@ -782,7 +814,7 @@ function HistoryPanel({ records, mode, activeAccount, onInspect, onCopy, onDelet
             const resume = buildTestResume(record);
             return (
               <article
-                className="historyItem"
+                className={record.id === activeRecordId ? 'historyItem active' : 'historyItem'}
                 key={record.id}
                 role="button"
                 tabIndex="0"
