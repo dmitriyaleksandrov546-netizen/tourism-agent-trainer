@@ -12,8 +12,14 @@ describe('admin navigation', () => {
     expect(viewFromPath('/anything-else')).toBe('trainer');
   });
 
+  it('opens account administration on /accounts', () => {
+    expect(viewFromPath('/accounts')).toBe('accounts');
+    expect(viewFromPath('/accounts/')).toBe('accounts');
+  });
+
   it('builds public paths for views', () => {
     expect(pathForView('admin')).toBe('/admin');
+    expect(pathForView('accounts')).toBe('/accounts');
     expect(pathForView('trainer')).toBe('/');
   });
 });
