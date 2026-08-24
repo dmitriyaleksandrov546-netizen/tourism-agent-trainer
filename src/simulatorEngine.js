@@ -206,6 +206,19 @@ function hasAny(text, words) { return words.some((word) => text.includes(word));
 function hasLogic(text) { return hasAny(text, logicLinks); }
 function evidenceFor(text, words) { return words.filter((word) => text.includes(word)).slice(0, 3); }
 function sentenceCount(text) { return text.split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean).length; }
+function questionCount(text = '') { return (text.match(/\?/g) || []).length; }
+function clientMessages(history = []) { return history.filter((message) => message.role === 'client'); }
+function lastClientText(history = []) { return clientMessages(history).at(-1)?.text || ''; }
+function hasClientAlreadyPushed(history = []) {
+  return clientMessages(history).some((message) => {
+    const text = normalize(message.text || '');
+    return questionCount(text) > 0 || hasAny(text, ['общими словами', 'плохие отзывы', 'подвох', 'бюджет', 'когда вы пришлёте', 'почему мне бронировать']);
+  });
+}
+function isShortLowInfoAgentReply(text = '') {
+  const normalized = normalize(text);
+  return normalized.length <= 120 && hasAny(normalized, ['здравствуйте', 'добрый', 'доброго', 'скоро', 'сейчас', 'пришлю', 'подберу', 'подберём', 'постараюсь', 'посмотрю', 'помогу', 'вернусь', '?']);
+}
 function hasConcreteNextStep(text) { return hasAny(text, conceptMap.nextStep.words) && (/\d/.test(text) || hasAny(text, ['сегодня', 'вечером', 'завтра', 'whatsapp', 'вотсап'])); }
 function hasPromisedSelection(text) {
   return hasAny(text, ['пришлю', 'отправлю', 'скину', 'подготовлю', 'сравню', 'подберу', 'вариант', 'подборк'])
@@ -417,25 +430,40 @@ export function evaluateAgentReply(text = '', scenarioArg = scenarios[0], option
   };
 }
 
-export function getNextClientReply(scenarioId, agentText = '', turn = 1) {
+export function getNextClientReply(scenarioId, agentText = '', turn = 1, history = []) {
   const scenario = getScenarioById(scenarioId);
   const result = evaluateAgentReply(agentText, scenario);
   const normalized = normalize(agentText);
   const missedKeys = result.dimensions.filter((d) => d.status !== 'good').map((d) => d.key);
+  const alreadyPushed = hasClientAlreadyPushed(history);
+  const previousClient = normalize(lastClientText(history));
 
   if (hasPromisedSelection(normalized) && !result.penalties.some((p) => ['keywordStuffing', 'emptyAdvertising', 'dangerousPromise'].includes(p.key))) {
-    return 'Хорошо, тогда жду подборку в обещанный срок. Если что-то не проходит по бюджету или есть риск по отзывам — напишите сразу, пожалуйста.';
+    return 'Хорошо, тогда жду подборку в обещанный срок. Если что-то не проходит по бюджету или есть риск — напишите сразу, пожалуйста.';
+  }
+
+  if (isShortLowInfoAgentReply(agentText)) {
+    if (alreadyPushed) return 'Ок, жду. Лучше меньше вариантов, но с понятными плюсами и минусами.';
+    return 'Хорошо, подождём. Напишите, когда будет что-то конкретное по вариантам.';
+  }
+
+  if (alreadyPushed && turn >= 2) {
+    if (missedKeys.includes('nextStep')) return 'Ладно, поняла. Тогда напишите, когда сможете вернуться с конкретикой.';
+    if (result.score < 55) return 'Я пока не очень понимаю, но давайте посмотрим, что вы пришлёте.';
+    return 'Ок, звучит уже понятнее. Жду варианты.';
   }
 
   if (result.score < 40 || result.penalties.some((p) => ['keywordStuffing', 'emptyAdvertising'].includes(p.key))) {
-    return 'Вы сейчас общими словами отвечаете. А мне важно понять: в наш бюджет это реально или нет? И плохие отзывы вы проверяли?';
+    return previousClient.includes('бюджет')
+      ? 'Пока всё равно звучит общо. Я тогда подожду конкретные варианты.'
+      : 'Вы сейчас общими словами отвечаете. Мне важно понять: в наш бюджет это реально или нет?';
   }
   if (missedKeys.includes('budgetFork')) return 'Хорошо, но вы не сказали по бюджету. Я не хочу потом получить вариант сильно дороже.';
   if (missedKeys.includes('hiddenPain') && scenario.clientProfile.children.length) return 'А детям там точно будет нормально? Младшему 2 года, старшему 11 — это вообще разные потребности.';
   if (missedKeys.includes('riskHonesty')) return 'А какие минусы у этих вариантов? Мне не нужен рекламный текст, я хочу знать, где может быть подвох.';
-  if (missedKeys.includes('nextStep')) return 'Допустим. А что дальше конкретно — когда вы пришлёте варианты и как мы не потеряем цену?';
+  if (missedKeys.includes('nextStep')) return 'Допустим. А что дальше конкретно — когда вы пришлёте варианты?';
   if (turn >= 3 || result.score >= 80) return 'Ок, звучит уверенно. Жду 2–3 варианта с плюсами, минусами и что лучше именно для нас.';
-  return 'Допустим. А почему мне бронировать через вас, если я могу сам посмотреть на агрегаторе?';
+  return 'Допустим. А чем вы тогда поможете лучше, чем если я сам посмотрю варианты?';
 }
 
 export function createInitialMessages(scenarioId, variantIndex = 0) {

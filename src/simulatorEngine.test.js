@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { corpusInsights, analyzeSelectionLink, evaluateAgentReply, getNextClientReply, getScenarioById, shouldShowEvaluationReview } from './simulatorEngine.js';
+import {
+  corpusInsights,
+  analyzeSelectionLink,
+  evaluateAgentReply,
+  getNextClientReply,
+  getScenarioById,
+  shouldShowEvaluationReview
+} from './simulatorEngine.js';
+import { normalizeClientReply } from './neuroclientPrompt.js';
 
 describe('simulatorEngine', () => {
   it('exposes corpus and methodic sources from calls, Wazzup and training materials', () => {
@@ -51,11 +59,13 @@ describe('simulatorEngine', () => {
     expect(result.corpusSignals.length).toBeGreaterThan(0);
   });
 
-  it('client reply follows the most critical missed methodic', () => {
+  it('client reply does not interrogate after a generic short promise', () => {
     const reply = getNextClientReply('turkey-family-hard', 'Я подберу хороший отель, вам понравится.', 1);
 
-    expect(reply).toContain('общими словами');
-    expect(reply).toContain('бюджет');
+    expect(reply.length).toBeLessThan(120);
+    expect((reply.match(/\?/g) || []).length).toBe(0);
+    expect(reply).not.toContain('общими словами');
+    expect(reply).not.toContain('плохие отзывы');
   });
 
   it('waits when agent promised to send a selection by a concrete deadline', () => {
@@ -109,5 +119,45 @@ describe('simulatorEngine', () => {
     expect(shouldShowEvaluationReview({ messages: greetingOnly, agentText: 'Здравствуйте, Анна.' })).toBe(false);
     expect(shouldShowEvaluationReview({ messages: businessDialogue, agentText: businessDialogue[3].text })).toBe(true);
     expect(shouldShowEvaluationReview({ phase: 'selection-review', messages: greetingOnly, agentText: 'Вот подборка: https://example.com/tour' })).toBe(true);
+  });
+
+  it('does not interrogate after a short low-information agent reply', () => {
+    const reply = getNextClientReply('egypt-budget-objections', '?', 1, [
+      { role: 'client', text: 'Мне уже дали Египет дешевле. Почему у вас может быть дороже?' }
+    ]);
+
+    expect(reply.length).toBeLessThan(120);
+    expect((reply.match(/\?/g) || []).length).toBe(0);
+    expect(reply).not.toContain('отзывы');
+    expect(reply).not.toContain('географии');
+  });
+
+  it('backs off after the client already pushed once', () => {
+    const history = [
+      { role: 'client', text: 'Нас четверо, хотим Турцию летом. Реально подобрать что-то нормальное, не за космос?' },
+      { role: 'agent', text: 'Я подберу хороший отель, вам понравится.' },
+      { role: 'client', text: 'Вы сейчас общими словами отвечаете. Мне важно понять: в наш бюджет это реально или нет?' }
+    ];
+
+    const reply = getNextClientReply('turkey-family-hard', 'Посмотрю варианты и вернусь.', 2, history);
+
+    expect(reply).toContain('жду');
+    expect((reply.match(/\?/g) || []).length).toBe(0);
+    expect(reply).not.toContain('общими словами');
+  });
+
+  it('normalizes long LLM client replies to a compact messenger-style response', () => {
+    const longReply = [
+      'Понимаю, но мне важно проверить бюджет, отзывы, пляж и риски.',
+      'А можете ещё сказать, почему дороже?',
+      'И какие варианты будут по рифу?',
+      'И как понять, что там нет подвоха?',
+      'Ещё мне важно сравнить источники и географию отеля.'
+    ].join(' ');
+
+    const normalized = normalizeClientReply(longReply);
+
+    expect(normalized.length).toBeLessThanOrEqual(360);
+    expect(normalized).not.toContain('Ещё мне важно');
   });
 });
