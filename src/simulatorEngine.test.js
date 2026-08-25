@@ -146,6 +146,27 @@ describe('simulatorEngine', () => {
     expect(reply).not.toContain('общими словами');
   });
 
+  it('answers pending qualifying questions instead of only the last repeated one', () => {
+    const history = [
+      { role: 'client', text: 'Смотрим Турцию с детьми, но я уже запуталась в отелях и отзывах.' },
+      { role: 'agent', text: 'Добрый день' },
+      { role: 'client', text: 'Здравствуйте! Нам бы что-то для семьи, желательно не очень дорого.' },
+      { role: 'agent', text: 'Без проблем, сможем подобрать варианты для бронирования. Меня зовут Иван. Как вас?' },
+      { role: 'client', text: 'Анна, приятно познакомиться! Жду ваши варианты, у нас двое детей — младшему 3 года, старшему 10.' },
+      { role: 'agent', text: 'Подберем, но прежде несколько вопросов задам.' },
+      { role: 'agent', text: 'Когда хотели бы отдохнуть?' },
+      { role: 'agent', text: 'Что предпочитаете?' },
+      { role: 'agent', text: 'Бюджет?' },
+      { role: 'client', text: 'Максимум 180 тысяч, сильно больше не потянем.' }
+    ];
+
+    const reply = getNextClientReply('turkey-family-hard', 'Когда отдохнуть планируете?', 5, history);
+
+    expect(reply).toMatch(/июл|август|летом/i);
+    expect(reply).toMatch(/пляж|питани|дет/i);
+    expect(reply).not.toContain('Напишите, когда будет что-то конкретное');
+  });
+
   it('normalizes long LLM client replies to a compact messenger-style response', () => {
     const longReply = [
       'Понимаю, но мне важно проверить бюджет, отзывы, пляж и риски.',

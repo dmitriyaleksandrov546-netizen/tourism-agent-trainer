@@ -219,6 +219,66 @@ function isShortLowInfoAgentReply(text = '') {
   const normalized = normalize(text);
   return normalized.length <= 120 && hasAny(normalized, ['здравствуйте', 'добрый', 'доброго', 'скоро', 'сейчас', 'пришлю', 'подберу', 'подберём', 'постараюсь', 'посмотрю', 'помогу', 'вернусь', '?']);
 }
+
+const qualifyingQuestionMatchers = {
+  name: ['как вас', 'как зовут', 'зовут'],
+  dates: ['когда', 'дат', 'вылет', 'отдохнуть', 'месяц', 'период'],
+  preferences: ['предпочитаете', 'пожелан', 'что важно', 'требован', 'какой отель', 'пляж', 'питание'],
+  budget: ['бюджет', 'сумма', 'сколько', 'потратить', 'руб', 'тысяч'],
+  kids: ['дет', 'возраст', 'сколько лет']
+};
+
+const clientAnswerMatchers = {
+  name: ['анна', 'игорь', 'ольга', 'марина', 'дмитрий', 'зовут'],
+  dates: ['июн', 'июл', 'август', 'сент', 'октябр', 'ноябр', 'декабр', 'январ', 'феврал', 'март', 'апрел', 'май', 'летом', 'осень', 'зимой', 'весной', 'каникул', 'недел'],
+  preferences: ['пляж', 'питани', 'аквапарк', 'анимац', 'первая линия', 'риф', 'море', 'трансфер'],
+  budget: ['бюджет', 'тысяч', '000', '₽', 'руб', '180', '120', '230', '650'],
+  kids: ['младш', 'старш', 'ребён', 'ребен', 'дет', 'года', 'лет']
+};
+
+function askedQualifyingSlots(text = '') {
+  const normalized = normalize(text);
+  return Object.entries(qualifyingQuestionMatchers)
+    .filter(([, words]) => hasAny(normalized, words))
+    .map(([slot]) => slot);
+}
+
+function answeredQualifyingSlots(history = []) {
+  const clientText = normalize(clientMessages(history).map((message) => message.text || '').join(' '));
+  return new Set(Object.entries(clientAnswerMatchers)
+    .filter(([, words]) => hasAny(clientText, words))
+    .map(([slot]) => slot));
+}
+
+function pendingAskedQualifyingSlots(history = [], agentText = '') {
+  const asked = [...history.filter((message) => message.role === 'agent').map((message) => message.text || ''), agentText]
+    .flatMap(askedQualifyingSlots);
+  const answered = answeredQualifyingSlots(history);
+  return [...new Set(asked.filter((slot) => !answered.has(slot)))];
+}
+
+function answerForQualifyingSlot(slot, scenario) {
+  const name = scenario.clientProfile.name || 'Анна';
+  const children = scenario.clientProfile.children?.length ? scenario.clientProfile.children.join(' и ') : 'детей нет';
+  const answers = {
+    name: `${name}.`,
+    dates: scenario.id.includes('turkey')
+      ? 'По датам лучше июль или начало августа, на 7–10 ночей.'
+      : 'По датам пока смотрим ближайший удобный период, на 7–10 ночей.',
+    preferences: scenario.clientProfile.children?.length
+      ? `По отелю важно: нормальный пляж для младшего, питание и чтобы старшему было не скучно.`
+      : 'По отелю важно: нормальный пляж, питание и без плохих отзывов.',
+    budget: `По бюджету максимум ${scenario.clientProfile.budget}, сильно выше не хочется.`,
+    kids: scenario.clientProfile.children?.length ? `Детям ${children}.` : 'Едем без детей.'
+  };
+  return answers[slot] || '';
+}
+
+function buildPendingDetailsReply(history = [], agentText = '', scenario) {
+  const pending = pendingAskedQualifyingSlots(history, agentText).filter((slot) => slot !== 'name').slice(0, 2);
+  if (!pending.length) return '';
+  return pending.map((slot) => answerForQualifyingSlot(slot, scenario)).filter(Boolean).join(' ');
+}
 function hasConcreteNextStep(text) { return hasAny(text, conceptMap.nextStep.words) && (/\d/.test(text) || hasAny(text, ['сегодня', 'вечером', 'завтра', 'whatsapp', 'вотсап'])); }
 function hasPromisedSelection(text) {
   return hasAny(text, ['пришлю', 'отправлю', 'скину', 'подготовлю', 'сравню', 'подберу', 'вариант', 'подборк'])
@@ -441,6 +501,9 @@ export function getNextClientReply(scenarioId, agentText = '', turn = 1, history
   if (hasPromisedSelection(normalized) && !result.penalties.some((p) => ['keywordStuffing', 'emptyAdvertising', 'dangerousPromise'].includes(p.key))) {
     return 'Хорошо, тогда жду подборку в обещанный срок. Если что-то не проходит по бюджету или есть риск — напишите сразу, пожалуйста.';
   }
+
+  const pendingDetailsReply = buildPendingDetailsReply(history, agentText, scenario);
+  if (pendingDetailsReply) return pendingDetailsReply;
 
   if (isShortLowInfoAgentReply(agentText)) {
     if (alreadyPushed) return 'Ок, жду. Лучше меньше вариантов, но с понятными плюсами и минусами.';
